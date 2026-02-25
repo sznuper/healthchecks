@@ -80,3 +80,52 @@ jobs:
           fi
         env:
           BARKER_ARG_MOUNT: /nonexistent/mount/point
+
+  valgrind:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+
+      - name: Build checks with gcc
+        run: |
+          mkdir -p build
+          for src in checks/*.c; do
+            name=$(basename "$src" .c)
+            gcc -o "build/$name" "$src"
+          done
+
+      - name: Valgrind disk_usage
+        run: valgrind --leak-check=full --error-exitcode=1 ./build/disk_usage
+
+  benchmark:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: checks
+          path: build/
+
+      - name: Install hyperfine
+        run: sudo apt-get update && sudo apt-get install -y hyperfine
+
+      - name: Make binaries executable
+        run: chmod +x build/*
+
+      - name: Benchmark checks
+        run: |
+          echo "## Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Mean | Min | Max |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|------|-----|-----|" >> "$GITHUB_STEP_SUMMARY"
+          for bin in build/*; do
+            name=$(basename "$bin")
+            hyperfine --warmup 3 --min-runs 50 --export-json "/tmp/${name}.json" "sh ./$bin"
+            mean=$(jq -r '.results[0].mean * 1000 | floor' "/tmp/${name}.json")
+            min=$(jq -r '.results[0].min * 1000 | floor' "/tmp/${name}.json")
+            max=$(jq -r '.results[0].max * 1000 | floor' "/tmp/${name}.json")
+            echo "| ${name} | ${mean}ms | ${min}ms | ${max}ms |" >> "$GITHUB_STEP_SUMMARY"
+          done
