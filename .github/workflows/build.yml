@@ -124,8 +124,8 @@ jobs:
           for bin in build/*; do
             name=$(basename "$bin")
             hyperfine --warmup 3 --min-runs 50 --export-json "/tmp/${name}.json" "sh ./$bin"
-            mean=$(jq -r '.results[0].mean * 1000 | floor' "/tmp/${name}.json")
-            min=$(jq -r '.results[0].min * 1000 | floor' "/tmp/${name}.json")
-            max=$(jq -r '.results[0].max * 1000 | floor' "/tmp/${name}.json")
-            echo "| ${name} | ${mean}ms | ${min}ms | ${max}ms |" >> "$GITHUB_STEP_SUMMARY"
+            mean=$(jq -r '.results[0].mean * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
+            min=$(jq -r '.results[0].min * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
+            max=$(jq -r '.results[0].max * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
+            echo "| ${name} | ${mean} | ${min} | ${max} |" >> "$GITHUB_STEP_SUMMARY"
           done
