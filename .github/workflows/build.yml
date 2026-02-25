@@ -21,14 +21,40 @@ jobs:
             cosmocc -o "build/$name" "$src"
           done
 
+      - name: Clean build artifacts
+        run: rm -f build/*.aarch64.elf build/*.com.dbg
+
       - uses: actions/upload-artifact@v4
         with:
           name: checks
           path: build/
 
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container || '' }}
     needs: build
+    strategy:
+      matrix:
+        include:
+          - name: Ubuntu 24.04 x86_64
+            runner: ubuntu-24.04
+          - name: Ubuntu 22.04 x86_64
+            runner: ubuntu-22.04
+          - name: Ubuntu 24.04 aarch64
+            runner: ubuntu-24.04-arm
+          - name: Debian 12 x86_64
+            runner: ubuntu-24.04
+            container: debian:13
+          - name: Fedora 41 x86_64
+            runner: ubuntu-24.04
+            container: fedora:43
+          - name: Alpine 3.20 x86_64
+            runner: ubuntu-24.04
+            container: alpine:3.23
+          - name: Alpine 3.20 aarch64
+            runner: ubuntu-24.04-arm
+            container: alpine:3.23
     steps:
       - uses: actions/download-artifact@v4
         with:
