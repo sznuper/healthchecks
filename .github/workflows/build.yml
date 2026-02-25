@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shipurjan/setup-cosmopolitan@v1.3
+      - uses: shipurjan/setup-cosmopolitan@main
         with:
           version: '4.0.2'
 
