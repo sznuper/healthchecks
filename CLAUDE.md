@@ -41,7 +41,7 @@ Makefile
 
 ## Build
 
-Requires the Cosmopolitan Libc amalgamation (`cosmopolitan.h`, `crt.o`, `ape.o`, `cosmopolitan.a`). See Cosmopolitan docs for setup.
+Requires the `cosmocc` toolchain. See https://cosmo.zip/pub/cosmocc/ for setup.
 
 ```bash
 make            # build all checks
