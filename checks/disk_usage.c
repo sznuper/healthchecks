@@ -20,10 +20,10 @@
  *   otherwise               -> ok
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <sys/statvfs.h>
 
 static void format_bytes(unsigned long long bytes, char *buf, size_t len) {
@@ -46,16 +46,19 @@ static void format_bytes(unsigned long long bytes, char *buf, size_t len) {
 
 static double parse_threshold(const char *env_key, double fallback) {
     const char *val = getenv(env_key);
-    if (!val) return fallback;
+    if (!val)
+        return fallback;
     char *end;
     double d = strtod(val, &end);
-    if (end == val || d < 0.0 || d > 1.0) return fallback;
+    if (end == val || d < 0.0 || d > 1.0)
+        return fallback;
     return d;
 }
 
 int main() {
     const char *mount = getenv("BARKER_ARG_MOUNT");
-    if (!mount) mount = "/";
+    if (!mount)
+        mount = "/";
 
     double thresh_warn = parse_threshold("BARKER_ARG_THRESHOLD_WARN", 0.80);
     double thresh_crit = parse_threshold("BARKER_ARG_THRESHOLD_CRIT", 0.95);
@@ -68,7 +71,7 @@ int main() {
 
     unsigned long long total = (unsigned long long)fs.f_frsize * fs.f_blocks;
     unsigned long long avail = (unsigned long long)fs.f_frsize * fs.f_bavail;
-    unsigned long long used  = total - avail;
+    unsigned long long used = total - avail;
 
     double usage = (total > 0) ? (double)used / (double)total : 0.0;
     int usage_pct = (int)(usage * 100.0 + 0.5);
@@ -79,9 +82,12 @@ int main() {
     format_bytes(avail, avail_str, sizeof(avail_str));
 
     const char *status;
-    if (usage >= thresh_crit)      status = "critical";
-    else if (usage >= thresh_warn) status = "warning";
-    else                           status = "ok";
+    if (usage >= thresh_crit)
+        status = "critical";
+    else if (usage >= thresh_warn)
+        status = "warning";
+    else
+        status = "ok";
 
     printf("status=%s\n", status);
     printf("mount=%s\n", mount);
