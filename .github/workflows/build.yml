@@ -1,0 +1,65 @@
+name: Build and Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tritao/setup-cosmopolitan@v1.3
+        with:
+          version: '4.0.2'
+
+      - name: Build checks
+        run: |
+          mkdir -p build
+          for src in checks/*.c; do
+            name=$(basename "$src" .c)
+            cosmocc -o "build/$name" "$src"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checks
+          path: build/
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: checks
+          path: build/
+
+      - name: Make binaries executable
+        run: chmod +x build/*
+
+      - name: Test disk_usage defaults
+        run: |
+          output=$(./build/disk_usage)
+          echo "$output"
+          echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
+          echo "$output" | grep -q "^mount=/$"
+          echo "$output" | grep -q "^usage="
+          echo "$output" | grep -q "^total="
+          echo "$output" | grep -q "^used="
+          echo "$output" | grep -q "^available="
+
+      - name: Test disk_usage with custom thresholds
+        run: |
+          output=$(BARKER_ARG_THRESHOLD_WARN=0.01 BARKER_ARG_THRESHOLD_CRIT=0.02 BARKER_ARG_MOUNT=/ ./build/disk_usage)
+          echo "$output"
+          echo "$output" | grep -q "^status=critical$"
+
+      - name: Test disk_usage exit code on invalid mount
+        run: |
+          if ./build/disk_usage 2>/dev/null; then
+            echo "FAIL: expected non-zero exit for invalid mount"
+            exit 1
+          fi
+        env:
+          BARKER_ARG_MOUNT: /nonexistent/mount/point
