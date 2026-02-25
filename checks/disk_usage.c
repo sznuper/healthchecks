@@ -20,7 +20,11 @@
  *   otherwise               -> ok
  */
 
-#include "cosmopolitan.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/statvfs.h>
 
 static void format_bytes(unsigned long long bytes, char *buf, size_t len) {
     const char *units[] = {"B", "K", "M", "G", "T", "P"};
