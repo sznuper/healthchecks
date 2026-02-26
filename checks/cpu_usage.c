@@ -8,23 +8,26 @@
  *   BARKER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
  *   BARKER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
  *   BARKER_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
+ *   BARKER_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
  *
- * Output:
- *   status         - ok, warning, or critical
- *   usage          - Total CPU usage percentage as integer (0-100)
- *   user           - User CPU percentage as integer (0-100)
- *   nice           - Nice CPU percentage as integer (0-100)
- *   system         - System CPU percentage as integer (0-100)
- *   idle           - Idle percentage as integer (0-100)
- *   iowait         - I/O wait percentage as integer (0-100)
- *   irq            - IRQ percentage as integer (0-100)
- *   softirq        - Soft IRQ percentage as integer (0-100)
- *   steal          - Steal percentage as integer (0-100)
- *   guest          - Guest CPU percentage as integer (0-100, subset of user)
- *   guest_nice     - Guest nice CPU percentage as integer (0-100, subset of nice)
- *   cores          - Number of CPU cores
- *   procs_running  - Number of currently running processes
- *   procs_blocked  - Number of processes blocked on I/O
+ * Output (basic):
+ *   status          - ok, warning, or critical
+ *   usage_percent   - Total CPU usage percentage as integer (0-100)
+ *   user_percent    - User CPU percentage as integer (0-100)
+ *   system_percent  - System CPU percentage as integer (0-100)
+ *   idle_percent    - Idle percentage as integer (0-100)
+ *   iowait_percent  - I/O wait percentage as integer (0-100)
+ *   cores           - Number of CPU cores
+ *
+ * Output (advanced adds):
+ *   nice_percent       - Nice CPU percentage as integer (0-100)
+ *   irq_percent        - IRQ percentage as integer (0-100)
+ *   softirq_percent    - Soft IRQ percentage as integer (0-100)
+ *   steal_percent      - Steal percentage as integer (0-100)
+ *   guest_percent      - Guest CPU percentage as integer (0-100, subset of user)
+ *   guest_nice_percent - Guest nice CPU percentage as integer (0-100, subset of nice)
+ *   procs_running      - Number of currently running processes
+ *   procs_blocked      - Number of processes blocked on I/O
  *
  * Status logic:
  *   usage >= threshold_crit -> critical
@@ -33,10 +36,9 @@
  */
 
 #include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
+
+#include "barker.h"
 
 struct cpu_sample {
     unsigned long long user;
@@ -50,17 +52,6 @@ struct cpu_sample {
     unsigned long long guest;
     unsigned long long guest_nice;
 };
-
-static double parse_threshold(const char *env_key, double fallback) {
-    const char *val = getenv(env_key);
-    if (!val)
-        return fallback;
-    char *end;
-    double d = strtod(val, &end);
-    if (end == val || d < 0.0 || d > 1.0)
-        return fallback;
-    return d;
-}
 
 static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
                           int *procs_blocked) {
@@ -106,6 +97,8 @@ static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
 int main() {
     double thresh_warn = parse_threshold("BARKER_ARG_THRESHOLD_WARN", 0.80);
     double thresh_crit = parse_threshold("BARKER_ARG_THRESHOLD_CRIT", 0.95);
+
+    int advanced = parse_bool("BARKER_ARG_ADVANCED");
 
     long sample_ms = 250;
     const char *sample_val = getenv("BARKER_ARG_SAMPLE_MS");
@@ -159,20 +152,22 @@ int main() {
 
     if (total == 0) {
         printf("status=ok\n");
-        printf("usage=0\n");
-        printf("user=0\n");
-        printf("nice=0\n");
-        printf("system=0\n");
-        printf("idle=100\n");
-        printf("iowait=0\n");
-        printf("irq=0\n");
-        printf("softirq=0\n");
-        printf("steal=0\n");
-        printf("guest=0\n");
-        printf("guest_nice=0\n");
+        printf("usage_percent=0\n");
+        printf("user_percent=0\n");
+        printf("system_percent=0\n");
+        printf("idle_percent=100\n");
+        printf("iowait_percent=0\n");
         printf("cores=%d\n", cores);
-        printf("procs_running=%d\n", running);
-        printf("procs_blocked=%d\n", blocked);
+        if (advanced) {
+            printf("nice_percent=0\n");
+            printf("irq_percent=0\n");
+            printf("softirq_percent=0\n");
+            printf("steal_percent=0\n");
+            printf("guest_percent=0\n");
+            printf("guest_nice_percent=0\n");
+            printf("procs_running=%d\n", running);
+            printf("procs_blocked=%d\n", blocked);
+        }
         return 0;
     }
 
@@ -200,20 +195,23 @@ int main() {
         status = "ok";
 
     printf("status=%s\n", status);
-    printf("usage=%d\n", usage_pct);
-    printf("user=%d\n", user_pct);
-    printf("nice=%d\n", nice_pct);
-    printf("system=%d\n", system_pct);
-    printf("idle=%d\n", idle_pct);
-    printf("iowait=%d\n", iowait_pct);
-    printf("irq=%d\n", irq_pct);
-    printf("softirq=%d\n", softirq_pct);
-    printf("steal=%d\n", steal_pct);
-    printf("guest=%d\n", guest_pct);
-    printf("guest_nice=%d\n", guest_nice_pct);
+    printf("usage_percent=%d\n", usage_pct);
+    printf("user_percent=%d\n", user_pct);
+    printf("system_percent=%d\n", system_pct);
+    printf("idle_percent=%d\n", idle_pct);
+    printf("iowait_percent=%d\n", iowait_pct);
     printf("cores=%d\n", cores);
-    printf("procs_running=%d\n", running);
-    printf("procs_blocked=%d\n", blocked);
+
+    if (advanced) {
+        printf("nice_percent=%d\n", nice_pct);
+        printf("irq_percent=%d\n", irq_pct);
+        printf("softirq_percent=%d\n", softirq_pct);
+        printf("steal_percent=%d\n", steal_pct);
+        printf("guest_percent=%d\n", guest_pct);
+        printf("guest_nice_percent=%d\n", guest_nice_pct);
+        printf("procs_running=%d\n", running);
+        printf("procs_blocked=%d\n", blocked);
+    }
 
     return 0;
 }

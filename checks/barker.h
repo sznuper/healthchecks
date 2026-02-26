@@ -1,0 +1,69 @@
+/*
+ * barker.h - Shared utilities for Barker checks.
+ *
+ * Header-only: all functions are static inline so each check compiles
+ * to a fully self-contained binary with no shared library dependency.
+ */
+
+#ifndef BARKER_H
+#define BARKER_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Parse a BARKER_ARG_* env var as a boolean.
+ * Returns 0 for unset, empty, "0", "false", "no"; 1 otherwise. */
+static inline int parse_bool(const char *env_key) {
+    const char *val = getenv(env_key);
+    if (!val || val[0] == '\0')
+        return 0;
+    if (strcmp(val, "0") == 0 || strcmp(val, "false") == 0 || strcmp(val, "no") == 0)
+        return 0;
+    return 1;
+}
+
+/* Parse a BARKER_ARG_* env var as a float threshold (0.0-1.0).
+ * Returns fallback if unset or out of range. */
+static inline double parse_threshold(const char *env_key, double fallback) {
+    const char *val = getenv(env_key);
+    if (!val)
+        return fallback;
+    char *end;
+    double d = strtod(val, &end);
+    if (end == val || d < 0.0 || d > 1.0)
+        return fallback;
+    return d;
+}
+
+/* Format a byte count as a human-readable string (e.g. "8.5G", "120M"). */
+static inline void format_bytes(unsigned long long bytes, char *buf, size_t len) {
+    const char *units[] = {"B", "K", "M", "G", "T", "P"};
+    int i = 0;
+    double size = (double)bytes;
+    while (size >= 1024.0 && i < 5) {
+        size /= 1024.0;
+        i++;
+    }
+    if (i == 0)
+        snprintf(buf, len, "%llu%s", bytes, units[i]);
+    else if (size >= 100.0)
+        snprintf(buf, len, "%d%s", (int)(size + 0.5), units[i]);
+    else if (size >= 10.0)
+        snprintf(buf, len, "%.1f%s", size, units[i]);
+    else
+        snprintf(buf, len, "%.2f%s", size, units[i]);
+}
+
+/* Emit a byte-valued key=value pair, raw or human-readable. */
+static inline void emit_bytes(const char *key, unsigned long long bytes, int raw) {
+    if (raw) {
+        printf("%s=%llu\n", key, bytes);
+    } else {
+        char buf[16];
+        format_bytes(bytes, buf, sizeof(buf));
+        printf("%s=%s\n", key, buf);
+    }
+}
+
+#endif /* BARKER_H */

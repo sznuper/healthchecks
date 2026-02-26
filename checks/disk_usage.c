@@ -5,20 +5,24 @@
  *   BARKER_ARG_MOUNT          - Mount point to check (default: "/")
  *   BARKER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
  *   BARKER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   BARKER_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
+ *   BARKER_ARG_ADVANCED       - If set, emit all fields (free, inode stats)
  *
- * Output:
+ * Output (basic):
  *   status           - ok, warning, or critical
  *   mount            - The mount point checked
- *   usage            - Usage percentage as integer (0-100)
- *   total            - Total disk space (human-readable, e.g. "50G")
- *   used             - Used disk space (human-readable)
- *   free             - Free disk space including root-reserved (human-readable)
- *   available        - Available disk space for non-root (human-readable)
+ *   usage_percent    - Usage percentage as integer (0-100)
+ *   total            - Total disk space (human-readable, or raw bytes if RAW set)
+ *   used             - Used disk space (human-readable, or raw bytes)
+ *   available        - Available disk space for non-root (human-readable, or raw bytes)
+ *
+ * Output (advanced adds):
+ *   free             - Free disk space including root-reserved (human-readable, or raw bytes)
  *   inodes           - Total inodes
  *   inodes_used      - Used inodes
  *   inodes_free      - Free inodes including root-reserved
  *   inodes_available - Available inodes for non-root
- *   inodes_usage     - Inode usage percentage as integer (0-100)
+ *   inodes_usage_percent - Inode usage percentage as integer (0-100)
  *
  * Note: Filesystems like btrfs do not expose inode counts via statvfs.
  * On these filesystems all inode fields will be 0 — this is expected.
@@ -30,39 +34,9 @@
  */
 
 #include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/statvfs.h>
 
-static void format_bytes(unsigned long long bytes, char *buf, size_t len) {
-    const char *units[] = {"B", "K", "M", "G", "T", "P"};
-    int i = 0;
-    double size = (double)bytes;
-    while (size >= 1024.0 && i < 5) {
-        size /= 1024.0;
-        i++;
-    }
-    if (i == 0)
-        snprintf(buf, len, "%llu%s", bytes, units[i]);
-    else if (size >= 100.0)
-        snprintf(buf, len, "%d%s", (int)(size + 0.5), units[i]);
-    else if (size >= 10.0)
-        snprintf(buf, len, "%.1f%s", size, units[i]);
-    else
-        snprintf(buf, len, "%.2f%s", size, units[i]);
-}
-
-static double parse_threshold(const char *env_key, double fallback) {
-    const char *val = getenv(env_key);
-    if (!val)
-        return fallback;
-    char *end;
-    double d = strtod(val, &end);
-    if (end == val || d < 0.0 || d > 1.0)
-        return fallback;
-    return d;
-}
+#include "barker.h"
 
 int main() {
     const char *mount = getenv("BARKER_ARG_MOUNT");
@@ -71,6 +45,9 @@ int main() {
 
     double thresh_warn = parse_threshold("BARKER_ARG_THRESHOLD_WARN", 0.80);
     double thresh_crit = parse_threshold("BARKER_ARG_THRESHOLD_CRIT", 0.95);
+
+    int raw = parse_bool("BARKER_ARG_RAW");
+    int advanced = parse_bool("BARKER_ARG_ADVANCED");
 
     struct statvfs fs;
     if (statvfs(mount, &fs) != 0) {
@@ -98,12 +75,6 @@ int main() {
         (inodes_nonroot > 0) ? (double)inodes_used / (double)inodes_nonroot : 0.0;
     int inode_usage_pct = (int)(inode_usage * 100.0 + 0.5);
 
-    char total_str[16], used_str[16], free_str[16], avail_str[16];
-    format_bytes(total, total_str, sizeof(total_str));
-    format_bytes(used, used_str, sizeof(used_str));
-    format_bytes(free_bytes, free_str, sizeof(free_str));
-    format_bytes(avail, avail_str, sizeof(avail_str));
-
     const char *status;
     if (usage >= thresh_crit)
         status = "critical";
@@ -114,16 +85,19 @@ int main() {
 
     printf("status=%s\n", status);
     printf("mount=%s\n", mount);
-    printf("usage=%d\n", usage_pct);
-    printf("total=%s\n", total_str);
-    printf("used=%s\n", used_str);
-    printf("free=%s\n", free_str);
-    printf("available=%s\n", avail_str);
-    printf("inodes=%llu\n", inodes_total);
-    printf("inodes_used=%llu\n", inodes_used);
-    printf("inodes_free=%llu\n", inodes_free);
-    printf("inodes_available=%llu\n", inodes_avail);
-    printf("inodes_usage=%d\n", inode_usage_pct);
+    printf("usage_percent=%d\n", usage_pct);
+    emit_bytes("total", total, raw);
+    emit_bytes("used", used, raw);
+    emit_bytes("available", avail, raw);
+
+    if (advanced) {
+        emit_bytes("free", free_bytes, raw);
+        printf("inodes=%llu\n", inodes_total);
+        printf("inodes_used=%llu\n", inodes_used);
+        printf("inodes_free=%llu\n", inodes_free);
+        printf("inodes_available=%llu\n", inodes_avail);
+        printf("inodes_usage_percent=%d\n", inode_usage_pct);
+    }
 
     return 0;
 }
