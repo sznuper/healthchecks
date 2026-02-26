@@ -7,12 +7,21 @@
  *   BARKER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
  *
  * Output:
- *   status    - ok, warning, or critical
- *   mount     - The mount point checked
- *   usage     - Usage percentage as integer (0-100)
- *   total     - Total disk space (human-readable, e.g. "50G")
- *   used      - Used disk space (human-readable)
- *   available - Available disk space (human-readable)
+ *   status           - ok, warning, or critical
+ *   mount            - The mount point checked
+ *   usage            - Usage percentage as integer (0-100)
+ *   total            - Total disk space (human-readable, e.g. "50G")
+ *   used             - Used disk space (human-readable)
+ *   free             - Free disk space including root-reserved (human-readable)
+ *   available        - Available disk space for non-root (human-readable)
+ *   inodes           - Total inodes
+ *   inodes_used      - Used inodes
+ *   inodes_free      - Free inodes including root-reserved
+ *   inodes_available - Available inodes for non-root
+ *   inodes_usage     - Inode usage percentage as integer (0-100)
+ *
+ * Note: Filesystems like btrfs do not expose inode counts via statvfs.
+ * On these filesystems all inode fields will be 0 — this is expected.
  *
  * Status logic:
  *   usage >= threshold_crit -> critical
@@ -70,15 +79,29 @@ int main() {
     }
 
     unsigned long long total = (unsigned long long)fs.f_frsize * fs.f_blocks;
+    unsigned long long free_bytes = (unsigned long long)fs.f_frsize * fs.f_bfree;
     unsigned long long avail = (unsigned long long)fs.f_frsize * fs.f_bavail;
-    unsigned long long used = total - avail;
+    unsigned long long used = total - free_bytes;
 
-    double usage = (total > 0) ? (double)used / (double)total : 0.0;
+    /* usage = used / (used + available), matching df behavior */
+    unsigned long long nonroot_total = used + avail;
+    double usage = (nonroot_total > 0) ? (double)used / (double)nonroot_total : 0.0;
     int usage_pct = (int)(usage * 100.0 + 0.5);
 
-    char total_str[16], used_str[16], avail_str[16];
+    unsigned long long inodes_total = fs.f_files;
+    unsigned long long inodes_free = fs.f_ffree;
+    unsigned long long inodes_avail = fs.f_favail;
+    unsigned long long inodes_used = inodes_total - inodes_free;
+    /* same df-style denominator for inodes */
+    unsigned long long inodes_nonroot = inodes_used + inodes_avail;
+    double inode_usage =
+        (inodes_nonroot > 0) ? (double)inodes_used / (double)inodes_nonroot : 0.0;
+    int inode_usage_pct = (int)(inode_usage * 100.0 + 0.5);
+
+    char total_str[16], used_str[16], free_str[16], avail_str[16];
     format_bytes(total, total_str, sizeof(total_str));
     format_bytes(used, used_str, sizeof(used_str));
+    format_bytes(free_bytes, free_str, sizeof(free_str));
     format_bytes(avail, avail_str, sizeof(avail_str));
 
     const char *status;
@@ -94,7 +117,13 @@ int main() {
     printf("usage=%d\n", usage_pct);
     printf("total=%s\n", total_str);
     printf("used=%s\n", used_str);
+    printf("free=%s\n", free_str);
     printf("available=%s\n", avail_str);
+    printf("inodes=%llu\n", inodes_total);
+    printf("inodes_used=%llu\n", inodes_used);
+    printf("inodes_free=%llu\n", inodes_free);
+    printf("inodes_available=%llu\n", inodes_avail);
+    printf("inodes_usage=%d\n", inode_usage_pct);
 
     return 0;
 }
