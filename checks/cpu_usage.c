@@ -35,7 +35,6 @@
  *   otherwise               -> ok
  */
 
-#include <errno.h>
 #include <time.h>
 
 #include "barker.h"
@@ -114,7 +113,7 @@ int main() {
     int running = 0, blocked = 0;
 
     if (read_proc_stat(&s1, &cores, NULL, NULL) != 0) {
-        fprintf(stderr, "failed to read /proc/stat: %s\n", strerror(errno));
+        fprintf(stderr, "cpu_usage: requires Linux (/proc/stat not found)\n");
         return 1;
     }
 
@@ -122,7 +121,7 @@ int main() {
     nanosleep(&ts, NULL);
 
     if (read_proc_stat(&s2, NULL, &running, &blocked) != 0) {
-        fprintf(stderr, "failed to read /proc/stat: %s\n", strerror(errno));
+        fprintf(stderr, "cpu_usage: requires Linux (/proc/stat not found)\n");
         return 1;
     }
 

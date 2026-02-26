@@ -38,7 +38,6 @@
  */
 
 #include <ctype.h>
-#include <errno.h>
 
 #include "barker.h"
 
@@ -75,7 +74,7 @@ int main() {
 
     FILE *f = fopen("/proc/meminfo", "r");
     if (!f) {
-        fprintf(stderr, "failed to open /proc/meminfo: %s\n", strerror(errno));
+        fprintf(stderr, "memory_usage: requires Linux (/proc/meminfo not found)\n");
         return 1;
     }
 

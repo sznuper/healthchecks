@@ -44,8 +44,6 @@ jobs:
           - name: Alpine 3.23 x86_64
             runner: ubuntu-24.04
             container: alpine:3.23
-          - name: macOS 15 aarch64
-            runner: macos-15
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -111,7 +109,7 @@ jobs:
           echo "$output" | grep -q "^inodes_available="
           echo "$output" | grep -q "^inodes_usage_percent="
 
-      # --- cpu_usage ---
+      # --- cpu_usage (requires /proc/stat — Linux only) ---
 
       - name: Test cpu_usage defaults
         run: |
@@ -147,7 +145,7 @@ jobs:
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
 
-      # --- memory_usage ---
+      # --- memory_usage (requires /proc/meminfo — Linux only) ---
 
       - name: Test memory_usage defaults
         if: ${{ !matrix.container }}
