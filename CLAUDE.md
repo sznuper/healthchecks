@@ -23,7 +23,7 @@ Every check follows this protocol:
 Example output:
 ```
 status=warning
-usage=84
+usage_percent=84
 available=8G
 ```
 
@@ -31,6 +31,7 @@ available=8G
 
 ```
 checks/
+  barker.h         # shared utilities (header-only, no link dependency)
   disk_usage.c
   cpu_usage.c
   memory_usage.c
@@ -61,11 +62,19 @@ Each check compiles to a single portable binary with no libc dependency.
 
 ## Conventions
 
-- One `.c` file per check, no shared libraries.
+- One `.c` file per check, no shared libraries. Common utilities live in `barker.h` (header-only, `static inline`).
 - Use `printf("key=value\n")` for output — no JSON, no fancy formatting.
 - Document args, outputs, and status logic in a comment block at the top of each file.
 - Threshold args should be floats (0.0–1.0) for percentages.
-- Human-readable values in output (e.g., `available=8G` not `available=8589934592`).
+- Percentage output keys use the `_percent` suffix (e.g., `usage_percent=84`, `swap_usage_percent=12`).
+- Human-readable values in output by default (e.g., `available=8G`). When `BARKER_ARG_RAW` is set, emit raw byte integers instead (e.g., `available=8589934592`).
+
+## Standard optional args
+
+These args are recognized across all checks for consistent behavior:
+
+- `BARKER_ARG_RAW` — When set (non-empty), byte-valued fields emit raw integers instead of human-readable strings. Percentages and counts are unaffected. No effect on checks without byte fields (e.g., cpu_usage).
+- `BARKER_ARG_ADVANCED` — When set (non-empty), emit the full set of output fields. Default output includes only the essential subset for each check.
 
 ## Testing
 
