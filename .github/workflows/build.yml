@@ -119,6 +119,8 @@ jobs:
         run: |
           echo "## Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Timing (hyperfine, 50 runs)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Mean | Min | Max |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|------|-----|-----|" >> "$GITHUB_STEP_SUMMARY"
           for bin in build/*; do
@@ -128,4 +130,16 @@ jobs:
             min=$(jq -r '.results[0].min * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
             max=$(jq -r '.results[0].max * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
             echo "| ${name} | ${mean} | ${min} | ${max} |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Resources (single run)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Peak RSS | CPU User | CPU Sys | Page Faults |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|----------|----------|---------|-------------|" >> "$GITHUB_STEP_SUMMARY"
+          for bin in build/*; do
+            name=$(basename "$bin")
+            /usr/bin/time -f "%M %U %S %F %R" -o "/tmp/${name}.time" sh ./$bin > /dev/null
+            read rss user sys major minor < "/tmp/${name}.time"
+            echo "| ${name} | ${rss} KB | ${user}s | ${sys}s | ${major} major / ${minor} minor |" >> "$GITHUB_STEP_SUMMARY"
           done
