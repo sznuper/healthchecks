@@ -1,11 +1,11 @@
 CC      = cosmocc
 CFLAGS  = -mtiny -Os -s
-SOURCES = $(wildcard checks/*.c)
-TARGETS = $(patsubst checks/%.c,build/%,$(SOURCES))
+SOURCES = $(wildcard src/*.c)
+TARGETS = $(patsubst src/%.c,build/%,$(SOURCES))
 
 all: $(TARGETS)
 
-build/%: checks/%.c | build
+build/%: src/%.c | build
 	$(CC) $(CFLAGS) -o $@ $<
 	rm -f $@.aarch64.elf $@.com.dbg
 
@@ -13,10 +13,10 @@ build:
 	mkdir -p build
 
 fmt:
-	clang-format -i checks/*.c
+	clang-format -i src/*.c
 
 check-fmt:
-	clang-format --dry-run --Werror checks/*.c
+	clang-format --dry-run --Werror src/*.c
 
 clean:
 	rm -rf build

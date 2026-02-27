@@ -5,10 +5,10 @@
  * determine current CPU usage percentages.
  *
  * Args (via environment):
- *   SZNUPER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   SZNUPER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
- *   SZNUPER_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
- *   SZNUPER_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
+ *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
  *
  * Output (basic):
  *   status          - ok, warning, or critical
@@ -94,13 +94,13 @@ static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
 }
 
 int main() {
-    double thresh_warn = parse_threshold("SZNUPER_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("SZNUPER_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
 
-    int advanced = parse_bool("SZNUPER_ARG_ADVANCED");
+    int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
     long sample_ms = 250;
-    const char *sample_val = getenv("SZNUPER_ARG_SAMPLE_MS");
+    const char *sample_val = getenv("HEALTHCHECK_ARG_SAMPLE_MS");
     if (sample_val) {
         char *end;
         long v = strtol(sample_val, &end, 10);

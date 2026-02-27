@@ -1,18 +1,18 @@
 /*
- * sznuper.h - Shared utilities for Sznuper checks.
+ * sznuper.h - Shared utilities for Sznuper healthchecks.
  *
- * Header-only: all functions are static inline so each check compiles
+ * Header-only: all functions are static inline so each healthcheck compiles
  * to a fully self-contained binary with no shared library dependency.
  */
 
-#ifndef SZNUPER_H
-#define SZNUPER_H
+#ifndef HEALTHCHECK_H
+#define HEALTHCHECK_H
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* Parse a SZNUPER_ARG_* env var as a boolean.
+/* Parse a HEALTHCHECK_ARG_* env var as a boolean.
  * Returns 0 for unset, empty, "0", "false", "no"; 1 otherwise. */
 static inline int parse_bool(const char *env_key) {
     const char *val = getenv(env_key);
@@ -23,7 +23,7 @@ static inline int parse_bool(const char *env_key) {
     return 1;
 }
 
-/* Parse a SZNUPER_ARG_* env var as a float threshold (0.0-1.0).
+/* Parse a HEALTHCHECK_ARG_* env var as a float threshold (0.0-1.0).
  * Returns fallback if unset or out of range. */
 static inline double parse_threshold(const char *env_key, double fallback) {
     const char *val = getenv(env_key);
@@ -66,4 +66,4 @@ static inline void emit_bytes(const char *key, unsigned long long bytes, int raw
     }
 }
 
-#endif /* SZNUPER_H */
+#endif /* HEALTHCHECK_H */

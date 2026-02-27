@@ -13,7 +13,7 @@ jobs:
         with:
           version: '4.0.2'
 
-      - name: Build checks
+      - name: Build healthchecks
         run: make
 
       - uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
 
       - name: Test disk_usage with custom thresholds
         run: |
-          output=$(BARKER_ARG_THRESHOLD_WARN=0.01 BARKER_ARG_THRESHOLD_CRIT=0.02 BARKER_ARG_MOUNT=/ sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.01 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.02 HEALTHCHECK_ARG_MOUNT=/ sh ./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
 
@@ -82,25 +82,25 @@ jobs:
             exit 1
           fi
         env:
-          BARKER_ARG_MOUNT: /nonexistent/mount/point
+          HEALTHCHECK_ARG_MOUNT: /nonexistent/mount/point
 
       - name: Test disk_usage RAW mode
         run: |
-          output=$(BARKER_ARG_RAW=1 sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/disk_usage)
           echo "$output"
           # raw total should be a plain integer (no unit suffix)
           echo "$output" | grep -q "^total=[0-9]*$"
 
       - name: Test disk_usage RAW=false is off
         run: |
-          output=$(BARKER_ARG_RAW=false sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_RAW=false sh ./build/disk_usage)
           echo "$output"
           # should have a unit suffix, not a plain integer
           echo "$output" | grep -q "^total=.*[A-Z]"
 
       - name: Test disk_usage ADVANCED mode
         run: |
-          output=$(BARKER_ARG_ADVANCED=1 sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^free="
           echo "$output" | grep -q "^inodes="
@@ -113,7 +113,7 @@ jobs:
 
       - name: Test cpu_usage defaults
         run: |
-          output=$(BARKER_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
           echo "$output"
           echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
           echo "$output" | grep -q "^usage_percent="
@@ -128,7 +128,7 @@ jobs:
 
       - name: Test cpu_usage ADVANCED mode
         run: |
-          output=$(BARKER_ARG_SAMPLE_MS=100 BARKER_ARG_ADVANCED=1 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 HEALTHCHECK_ARG_ADVANCED=1 sh ./build/cpu_usage)
           echo "$output"
           echo "$output" | grep -q "^nice_percent="
           echo "$output" | grep -q "^irq_percent="
@@ -141,7 +141,7 @@ jobs:
 
       - name: Test cpu_usage with low thresholds
         run: |
-          output=$(BARKER_ARG_THRESHOLD_WARN=0.001 BARKER_ARG_THRESHOLD_CRIT=0.002 BARKER_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.001 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.002 HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
 
@@ -167,14 +167,14 @@ jobs:
       - name: Test memory_usage RAW mode
         if: ${{ !matrix.container }}
         run: |
-          output=$(BARKER_ARG_RAW=1 sh ./build/memory_usage)
+          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/memory_usage)
           echo "$output"
           echo "$output" | grep -q "^total=[0-9]*$"
 
       - name: Test memory_usage ADVANCED mode
         if: ${{ !matrix.container }}
         run: |
-          output=$(BARKER_ARG_ADVANCED=1 sh ./build/memory_usage)
+          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/memory_usage)
           echo "$output"
           echo "$output" | grep -q "^free="
           echo "$output" | grep -q "^buffers="
@@ -191,7 +191,7 @@ jobs:
         if: ${{ !matrix.container }}
         run: |
           disk_out=$(sh ./build/disk_usage)
-          cpu_out=$(BARKER_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          cpu_out=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
           mem_out=$(sh ./build/memory_usage)
           # bare "usage=" without _percent suffix should not appear
           ! echo "$disk_out" | grep -q "^usage=[0-9]"
@@ -208,10 +208,10 @@ jobs:
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind
 
-      - name: Build checks with gcc
+      - name: Build healthchecks with gcc
         run: |
           mkdir -p build
-          for src in checks/*.c; do
+          for src in src/*.c; do
             name=$(basename "$src" .c)
             gcc -o "build/$name" "$src"
           done
@@ -222,7 +222,7 @@ jobs:
       - name: Valgrind cpu_usage
         run: valgrind --leak-check=full --error-exitcode=1 ./build/cpu_usage
         env:
-          BARKER_ARG_SAMPLE_MS: '100'
+          HEALTHCHECK_ARG_SAMPLE_MS: '100'
 
       - name: Valgrind memory_usage
         run: valgrind --leak-check=full --error-exitcode=1 ./build/memory_usage
@@ -242,7 +242,7 @@ jobs:
       - name: Make binaries executable
         run: chmod +x build/*
 
-      - name: Benchmark checks
+      - name: Benchmark healthchecks
         run: |
           echo "## Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

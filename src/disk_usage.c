@@ -2,11 +2,11 @@
  * disk_usage - Check disk usage for a given mount point.
  *
  * Args (via environment):
- *   SZNUPER_ARG_MOUNT          - Mount point to check (default: "/")
- *   SZNUPER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   SZNUPER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
- *   SZNUPER_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
- *   SZNUPER_ARG_ADVANCED       - If set, emit all fields (free, inode stats)
+ *   HEALTHCHECK_ARG_MOUNT          - Mount point to check (default: "/")
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
+ *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (free, inode stats)
  *
  * Output (basic):
  *   status           - ok, warning, or critical
@@ -39,15 +39,15 @@
 #include "sznuper.h"
 
 int main() {
-    const char *mount = getenv("SZNUPER_ARG_MOUNT");
+    const char *mount = getenv("HEALTHCHECK_ARG_MOUNT");
     if (!mount)
         mount = "/";
 
-    double thresh_warn = parse_threshold("SZNUPER_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("SZNUPER_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
 
-    int raw = parse_bool("SZNUPER_ARG_RAW");
-    int advanced = parse_bool("SZNUPER_ARG_ADVANCED");
+    int raw = parse_bool("HEALTHCHECK_ARG_RAW");
+    int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
     struct statvfs fs;
     if (statvfs(mount, &fs) != 0) {

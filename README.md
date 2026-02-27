@@ -1,12 +1,12 @@
-# checks
+# healthchecks
 
-Official checks for [Sznuper](https://github.com/sznuper/sznuper).
+Official healthchecks for [Sznuper](https://github.com/sznuper/sznuper).
 
-Each check is a standalone C binary compiled with [Cosmopolitan Libc](https://github.com/jart/cosmopolitan) — a single portable executable that runs on any Linux architecture (x86_64, aarch64) with zero external dependencies. No `df`, no `awk`, no runtime needed.
+Each healthcheck is a standalone C binary compiled with [Cosmopolitan Libc](https://github.com/jart/cosmopolitan) — a single portable executable that runs on any Linux architecture (x86_64, aarch64) with zero external dependencies. No `df`, no `awk`, no runtime needed.
 
-## Available checks
+## Available healthchecks
 
-| Check | Description |
+| Healthcheck | Description |
 |---|---|
 | `disk_usage` | Disk space usage for a given mount point |
 | `cpu_usage` | CPU utilization over a sampling interval |
@@ -14,11 +14,11 @@ Each check is a standalone C binary compiled with [Cosmopolitan Libc](https://gi
 | `ssh_login` | Detects SSH logins from `auth.log` (watch trigger) |
 | `systemd_unit` | Checks if a systemd unit is active |
 
-## Check interface
+## Healthcheck interface
 
-Every check follows the same contract:
+Every healthcheck follows the same contract:
 
-- **Input:** environment variables (`SZNUPER_ARG_*` for user-defined args, `SZNUPER_TRIGGER` for trigger metadata) and optionally stdin (for watch triggers).
+- **Input:** environment variables (`HEALTHCHECK_ARG_*` for user-defined args, `HEALTHCHECK_TRIGGER` for trigger metadata) and optionally stdin (for watch triggers).
 - **Output:** `key=value` pairs on stdout, one per line. The `status` key is required and must be `ok`, `warning`, or `critical`.
 
 Example output from `disk_usage`:
@@ -29,15 +29,15 @@ usage=84
 available=8G
 ```
 
-Each check documents its arguments, outputs, and status logic in a header comment.
+Each healthcheck documents its arguments, outputs, and status logic in a header comment.
 
-## Writing your own checks
+## Writing your own healthchecks
 
-A check can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `SZNUPER_ARG_*` environment variables and print `key=value` pairs to stdout.
+A healthcheck can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `HEALTHCHECK_ARG_*` environment variables and print `key=value` pairs to stdout.
 
-For checks you want to distribute, Cosmopolitan C is recommended for the same reason the official checks use it: one binary, every architecture, no dependencies.
+For healthchecks you want to distribute, Cosmopolitan C is recommended for the same reason the official healthchecks use it: one binary, every architecture, no dependencies.
 
-See the [Sznuper spec](https://github.com/sznuper/sznuper) for the full check interface documentation.
+See the [Sznuper spec](https://github.com/sznuper/sznuper) for the full healthcheck interface documentation.
 
 ## License
 

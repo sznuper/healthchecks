@@ -7,10 +7,10 @@
  * reclaimable memory.
  *
  * Args (via environment):
- *   SZNUPER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   SZNUPER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
- *   SZNUPER_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
- *   SZNUPER_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
+ *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
  *
  * Output (basic):
  *   status            - ok, warning, or critical
@@ -66,11 +66,11 @@ struct meminfo_entry {
 };
 
 int main() {
-    double thresh_warn = parse_threshold("SZNUPER_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("SZNUPER_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
 
-    int raw = parse_bool("SZNUPER_ARG_RAW");
-    int advanced = parse_bool("SZNUPER_ARG_ADVANCED");
+    int raw = parse_bool("HEALTHCHECK_ARG_RAW");
+    int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
     FILE *f = fopen("/proc/meminfo", "r");
     if (!f) {
