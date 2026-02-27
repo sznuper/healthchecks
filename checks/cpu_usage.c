@@ -5,10 +5,10 @@
  * determine current CPU usage percentages.
  *
  * Args (via environment):
- *   BARKER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   BARKER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
- *   BARKER_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
- *   BARKER_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
+ *   SZNUPER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
+ *   SZNUPER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   SZNUPER_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
+ *   SZNUPER_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
  *
  * Output (basic):
  *   status          - ok, warning, or critical
@@ -37,7 +37,7 @@
 
 #include <time.h>
 
-#include "barker.h"
+#include "sznuper.h"
 
 struct cpu_sample {
     unsigned long long user;
@@ -94,13 +94,13 @@ static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
 }
 
 int main() {
-    double thresh_warn = parse_threshold("BARKER_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("BARKER_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("SZNUPER_ARG_THRESHOLD_WARN", 0.80);
+    double thresh_crit = parse_threshold("SZNUPER_ARG_THRESHOLD_CRIT", 0.95);
 
-    int advanced = parse_bool("BARKER_ARG_ADVANCED");
+    int advanced = parse_bool("SZNUPER_ARG_ADVANCED");
 
     long sample_ms = 250;
-    const char *sample_val = getenv("BARKER_ARG_SAMPLE_MS");
+    const char *sample_val = getenv("SZNUPER_ARG_SAMPLE_MS");
     if (sample_val) {
         char *end;
         long v = strtol(sample_val, &end, 10);

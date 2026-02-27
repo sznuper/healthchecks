@@ -7,10 +7,10 @@
  * reclaimable memory.
  *
  * Args (via environment):
- *   BARKER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   BARKER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
- *   BARKER_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
- *   BARKER_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
+ *   SZNUPER_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
+ *   SZNUPER_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   SZNUPER_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
+ *   SZNUPER_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
  *
  * Output (basic):
  *   status            - ok, warning, or critical
@@ -39,7 +39,7 @@
 
 #include <ctype.h>
 
-#include "barker.h"
+#include "sznuper.h"
 
 /* Transform a /proc/meminfo key to lowercase output key.
  * Lowercases, replaces '(' with '_', removes ')'.
@@ -66,11 +66,11 @@ struct meminfo_entry {
 };
 
 int main() {
-    double thresh_warn = parse_threshold("BARKER_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("BARKER_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("SZNUPER_ARG_THRESHOLD_WARN", 0.80);
+    double thresh_crit = parse_threshold("SZNUPER_ARG_THRESHOLD_CRIT", 0.95);
 
-    int raw = parse_bool("BARKER_ARG_RAW");
-    int advanced = parse_bool("BARKER_ARG_ADVANCED");
+    int raw = parse_bool("SZNUPER_ARG_RAW");
+    int advanced = parse_bool("SZNUPER_ARG_ADVANCED");
 
     FILE *f = fopen("/proc/meminfo", "r");
     if (!f) {

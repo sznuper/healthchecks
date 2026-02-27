@@ -1,6 +1,6 @@
 # checks
 
-Official checks for [Barker](https://github.com/barker-app/barker).
+Official checks for [Sznuper](https://github.com/sznuper/sznuper).
 
 Each check is a standalone C binary compiled with [Cosmopolitan Libc](https://github.com/jart/cosmopolitan) — a single portable executable that runs on any Linux architecture (x86_64, aarch64) with zero external dependencies. No `df`, no `awk`, no runtime needed.
 
@@ -18,7 +18,7 @@ Each check is a standalone C binary compiled with [Cosmopolitan Libc](https://gi
 
 Every check follows the same contract:
 
-- **Input:** environment variables (`BARKER_ARG_*` for user-defined args, `BARKER_TRIGGER` for trigger metadata) and optionally stdin (for watch triggers).
+- **Input:** environment variables (`SZNUPER_ARG_*` for user-defined args, `SZNUPER_TRIGGER` for trigger metadata) and optionally stdin (for watch triggers).
 - **Output:** `key=value` pairs on stdout, one per line. The `status` key is required and must be `ok`, `warning`, or `critical`.
 
 Example output from `disk_usage`:
@@ -33,11 +33,11 @@ Each check documents its arguments, outputs, and status logic in a header commen
 
 ## Writing your own checks
 
-A check can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `BARKER_ARG_*` environment variables and print `key=value` pairs to stdout.
+A check can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `SZNUPER_ARG_*` environment variables and print `key=value` pairs to stdout.
 
 For checks you want to distribute, Cosmopolitan C is recommended for the same reason the official checks use it: one binary, every architecture, no dependencies.
 
-See the [Barker spec](https://github.com/barker-app/barker) for the full check interface documentation.
+See the [Sznuper spec](https://github.com/sznuper/sznuper) for the full check interface documentation.
 
 ## License
 
