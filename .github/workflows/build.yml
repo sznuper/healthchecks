@@ -57,7 +57,7 @@ jobs:
 
       - name: Test disk_usage defaults
         run: |
-          output=$(sh ./build/disk_usage)
+          output=$(./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
           echo "$output" | grep -q "^mount=/$"
@@ -71,13 +71,13 @@ jobs:
 
       - name: Test disk_usage with custom thresholds
         run: |
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.01 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.02 HEALTHCHECK_ARG_MOUNT=/ sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.01 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.02 HEALTHCHECK_ARG_MOUNT=/ ./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
 
       - name: Test disk_usage exit code on invalid mount
         run: |
-          if sh ./build/disk_usage 2>/dev/null; then
+          if ./build/disk_usage 2>/dev/null; then
             echo "FAIL: expected non-zero exit for invalid mount"
             exit 1
           fi
@@ -86,21 +86,21 @@ jobs:
 
       - name: Test disk_usage RAW mode
         run: |
-          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_RAW=1 ./build/disk_usage)
           echo "$output"
           # raw total should be a plain integer (no unit suffix)
           echo "$output" | grep -q "^total=[0-9]*$"
 
       - name: Test disk_usage RAW=false is off
         run: |
-          output=$(HEALTHCHECK_ARG_RAW=false sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_RAW=false ./build/disk_usage)
           echo "$output"
           # should have a unit suffix, not a plain integer
           echo "$output" | grep -q "^total=.*[A-Z]"
 
       - name: Test disk_usage ADVANCED mode
         run: |
-          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_ADVANCED=1 ./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^free="
           echo "$output" | grep -q "^inodes="
@@ -113,7 +113,7 @@ jobs:
 
       - name: Test cpu_usage defaults
         run: |
-          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 ./build/cpu_usage)
           echo "$output"
           echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
           echo "$output" | grep -q "^usage_percent="
@@ -128,7 +128,7 @@ jobs:
 
       - name: Test cpu_usage ADVANCED mode
         run: |
-          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 HEALTHCHECK_ARG_ADVANCED=1 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 HEALTHCHECK_ARG_ADVANCED=1 ./build/cpu_usage)
           echo "$output"
           echo "$output" | grep -q "^nice_percent="
           echo "$output" | grep -q "^irq_percent="
@@ -144,7 +144,7 @@ jobs:
           # Generate CPU load so the sample always sees non-zero ticks
           while :; do :; done &
           LOAD_PID=$!
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.001 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.002 HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.001 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.002 HEALTHCHECK_ARG_SAMPLE_MS=100 ./build/cpu_usage)
           kill $LOAD_PID 2>/dev/null || true
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
@@ -154,7 +154,7 @@ jobs:
       - name: Test memory_usage defaults
         if: ${{ !matrix.container }}
         run: |
-          output=$(sh ./build/memory_usage)
+          output=$(./build/memory_usage)
           echo "$output"
           echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
           echo "$output" | grep -q "^usage_percent="
@@ -171,14 +171,14 @@ jobs:
       - name: Test memory_usage RAW mode
         if: ${{ !matrix.container }}
         run: |
-          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/memory_usage)
+          output=$(HEALTHCHECK_ARG_RAW=1 ./build/memory_usage)
           echo "$output"
           echo "$output" | grep -q "^total=[0-9]*$"
 
       - name: Test memory_usage ADVANCED mode
         if: ${{ !matrix.container }}
         run: |
-          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/memory_usage)
+          output=$(HEALTHCHECK_ARG_ADVANCED=1 ./build/memory_usage)
           echo "$output"
           echo "$output" | grep -q "^free="
           echo "$output" | grep -q "^buffers="
@@ -194,9 +194,9 @@ jobs:
       - name: Verify no legacy key names
         if: ${{ !matrix.container }}
         run: |
-          disk_out=$(sh ./build/disk_usage)
-          cpu_out=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
-          mem_out=$(sh ./build/memory_usage)
+          disk_out=$(./build/disk_usage)
+          cpu_out=$(HEALTHCHECK_ARG_SAMPLE_MS=100 ./build/cpu_usage)
+          mem_out=$(./build/memory_usage)
           # bare "usage=" without _percent suffix should not appear
           ! echo "$disk_out" | grep -q "^usage=[0-9]"
           ! echo "$cpu_out" | grep -q "^usage=[0-9]"
@@ -256,7 +256,7 @@ jobs:
           echo "|-------|------|-----|-----|" >> "$GITHUB_STEP_SUMMARY"
           for bin in build/*; do
             name=$(basename "$bin")
-            hyperfine --warmup 3 --min-runs 50 --export-json "/tmp/${name}.json" "sh ./$bin"
+            hyperfine --warmup 3 --min-runs 50 --export-json "/tmp/${name}.json" "./$bin"
             mean=$(jq -r '.results[0].mean * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
             min=$(jq -r '.results[0].min * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
             max=$(jq -r '.results[0].max * 1000 | . * 100 | round / 100 | tostring + "ms"' "/tmp/${name}.json")
@@ -270,7 +270,7 @@ jobs:
           echo "|-------|----------|----------|---------|-------------|" >> "$GITHUB_STEP_SUMMARY"
           for bin in build/*; do
             name=$(basename "$bin")
-            /usr/bin/time -f "%M %U %S %F %R" -o "/tmp/${name}.time" sh ./$bin > /dev/null
+            /usr/bin/time -f "%M %U %S %F %R" -o "/tmp/${name}.time" ./$bin > /dev/null
             read rss user sys major minor < "/tmp/${name}.time"
             echo "| ${name} | ${rss} KB | ${user}s | ${sys}s | ${major} major / ${minor} minor |" >> "$GITHUB_STEP_SUMMARY"
           done
