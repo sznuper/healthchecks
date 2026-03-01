@@ -1,5 +1,5 @@
 CC      = cosmocc
-CFLAGS  = -mtinylinux -Os -s
+CFLAGS  = -mtiny -Os -s
 SOURCES = $(wildcard src/*.c)
 TARGETS = $(patsubst src/%.c,build/%,$(SOURCES))
 
