@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shipurjan/setup-cosmopolitan@feature/add-custom-url
+      - uses: shipurjan/setup-cosmopolitan@1f92831f1e4197d9ed52449de0f9d1efc2bdf04e
         with:
           version: 'nightly'
 
