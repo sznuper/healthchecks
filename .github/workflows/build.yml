@@ -9,9 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shipurjan/setup-cosmopolitan@main
+      - uses: shipurjan/setup-cosmopolitan@feature/add-custom-url
         with:
-          version: '4.0.2'
+          version: 'nightly'
 
       - name: Build healthchecks
         run: make
