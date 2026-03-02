@@ -39,9 +39,7 @@
 #include "sznuper.h"
 
 int main() {
-    const char *mount = getenv("HEALTHCHECK_ARG_MOUNT");
-    if (!mount)
-        mount = "/";
+    const char *mount = parse_string("HEALTHCHECK_ARG_MOUNT", "/");
 
     double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT", 80);
     double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT", 95);

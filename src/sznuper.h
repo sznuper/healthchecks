@@ -23,15 +23,46 @@ static inline int parse_bool(const char *env_key) {
     return 1;
 }
 
-/* Parse a HEALTHCHECK_ARG_* env var as a percentage threshold (0-100).
- * Returns fallback if unset or out of range. */
-static inline double parse_threshold(const char *env_key, double fallback) {
+/* Parse a HEALTHCHECK_ARG_* env var as a float.
+ * Returns fallback if unset or not a valid number. */
+static inline double parse_float(const char *env_key, double fallback) {
     const char *val = getenv(env_key);
     if (!val)
         return fallback;
     char *end;
     double d = strtod(val, &end);
-    if (end == val || d < 0.0 || d > 100.0)
+    if (end == val)
+        return fallback;
+    return d;
+}
+
+/* Parse a HEALTHCHECK_ARG_* env var as an integer.
+ * Returns fallback if unset or not a valid integer. */
+static inline long parse_int(const char *env_key, long fallback) {
+    const char *val = getenv(env_key);
+    if (!val)
+        return fallback;
+    char *end;
+    long n = strtol(val, &end, 10);
+    if (end == val)
+        return fallback;
+    return n;
+}
+
+/* Parse a HEALTHCHECK_ARG_* env var as a string.
+ * Returns fallback if unset. */
+static inline const char *parse_string(const char *env_key, const char *fallback) {
+    const char *val = getenv(env_key);
+    if (!val)
+        return fallback;
+    return val;
+}
+
+/* Parse a HEALTHCHECK_ARG_* env var as a percentage threshold (0-100).
+ * Returns fallback if unset or out of range. */
+static inline double parse_threshold(const char *env_key, double fallback) {
+    double d = parse_float(env_key, fallback);
+    if (d < 0.0 || d > 100.0)
         return fallback;
     return d;
 }

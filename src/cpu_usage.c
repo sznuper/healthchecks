@@ -66,17 +66,14 @@ static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
         if (!found_cpu && strncmp(line, "cpu ", 4) == 0) {
             s->guest = 0;
             s->guest_nice = 0;
-            if (sscanf(line,
-                       "cpu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
-                       &s->user, &s->nice, &s->system, &s->idle, &s->iowait,
-                       &s->irq, &s->softirq, &s->steal, &s->guest,
-                       &s->guest_nice) < 8) {
+            if (sscanf(line, "cpu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu", &s->user,
+                       &s->nice, &s->system, &s->idle, &s->iowait, &s->irq, &s->softirq, &s->steal,
+                       &s->guest, &s->guest_nice) < 8) {
                 fclose(f);
                 return -1;
             }
             found_cpu = 1;
-        } else if (strncmp(line, "cpu", 3) == 0 && line[3] >= '0' &&
-                   line[3] <= '9') {
+        } else if (strncmp(line, "cpu", 3) == 0 && line[3] >= '0' && line[3] <= '9') {
             core_count++;
         } else if (procs_running && strncmp(line, "procs_running ", 14) == 0) {
             sscanf(line, "procs_running %d", procs_running);
@@ -125,8 +122,7 @@ int main() {
         return 1;
     }
 
-#define DELTA(field) \
-    ((s2.field >= s1.field) ? (s2.field - s1.field) : 0)
+#define DELTA(field) ((s2.field >= s1.field) ? (s2.field - s1.field) : 0)
 
     unsigned long long d_user = DELTA(user);
     unsigned long long d_nice = DELTA(nice);
@@ -146,8 +142,8 @@ int main() {
     unsigned long long d_user_real = (d_user >= d_guest) ? d_user - d_guest : 0;
     unsigned long long d_nice_real = (d_nice >= d_guest_nice) ? d_nice - d_guest_nice : 0;
 
-    unsigned long long total = d_user_real + d_nice_real + d_system + d_idle +
-                               d_iowait + d_irq + d_softirq + d_steal;
+    unsigned long long total =
+        d_user_real + d_nice_real + d_system + d_idle + d_iowait + d_irq + d_softirq + d_steal;
 
     if (total == 0) {
         printf("status=ok\n");
