@@ -5,33 +5,33 @@
  * determine current CPU usage percentages.
  *
  * Args (via environment):
- *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT - Warning threshold as percentage 0-100 (default: 80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT - Critical threshold as percentage 0-100 (default: 95)
  *   HEALTHCHECK_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
  *
  * Output (basic):
  *   status          - ok, warning, or critical
- *   usage_percent   - Total CPU usage percentage as integer (0-100)
- *   user_percent    - User CPU percentage as integer (0-100)
- *   system_percent  - System CPU percentage as integer (0-100)
- *   idle_percent    - Idle percentage as integer (0-100)
- *   iowait_percent  - I/O wait percentage as integer (0-100)
+ *   usage_percent   - Total CPU usage percentage as float (0-100)
+ *   user_percent    - User CPU percentage as float (0-100)
+ *   system_percent  - System CPU percentage as float (0-100)
+ *   idle_percent    - Idle percentage as float (0-100)
+ *   iowait_percent  - I/O wait percentage as float (0-100)
  *   cores           - Number of CPU cores
  *
  * Output (advanced adds):
- *   nice_percent       - Nice CPU percentage as integer (0-100)
- *   irq_percent        - IRQ percentage as integer (0-100)
- *   softirq_percent    - Soft IRQ percentage as integer (0-100)
- *   steal_percent      - Steal percentage as integer (0-100)
- *   guest_percent      - Guest CPU percentage as integer (0-100, subset of user)
- *   guest_nice_percent - Guest nice CPU percentage as integer (0-100, subset of nice)
+ *   nice_percent       - Nice CPU percentage as float (0-100)
+ *   irq_percent        - IRQ percentage as float (0-100)
+ *   softirq_percent    - Soft IRQ percentage as float (0-100)
+ *   steal_percent      - Steal percentage as float (0-100)
+ *   guest_percent      - Guest CPU percentage as float (0-100, subset of user)
+ *   guest_nice_percent - Guest nice CPU percentage as float (0-100, subset of nice)
  *   procs_running      - Number of currently running processes
  *   procs_blocked      - Number of processes blocked on I/O
  *
  * Status logic:
- *   usage >= threshold_crit -> critical
- *   usage >= threshold_warn -> warning
+ *   usage >= threshold_crit_percent -> critical
+ *   usage >= threshold_warn_percent -> warning
  *   otherwise               -> ok
  */
 
@@ -94,8 +94,8 @@ static int read_proc_stat(struct cpu_sample *s, int *cores, int *procs_running,
 }
 
 int main() {
-    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT", 80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT", 95);
 
     int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
@@ -151,63 +151,61 @@ int main() {
 
     if (total == 0) {
         printf("status=ok\n");
-        printf("usage_percent=0\n");
-        printf("user_percent=0\n");
-        printf("system_percent=0\n");
-        printf("idle_percent=100\n");
-        printf("iowait_percent=0\n");
+        printf("usage_percent=0.0\n");
+        printf("user_percent=0.0\n");
+        printf("system_percent=0.0\n");
+        printf("idle_percent=100.0\n");
+        printf("iowait_percent=0.0\n");
         printf("cores=%d\n", cores);
         if (advanced) {
-            printf("nice_percent=0\n");
-            printf("irq_percent=0\n");
-            printf("softirq_percent=0\n");
-            printf("steal_percent=0\n");
-            printf("guest_percent=0\n");
-            printf("guest_nice_percent=0\n");
+            printf("nice_percent=0.0\n");
+            printf("irq_percent=0.0\n");
+            printf("softirq_percent=0.0\n");
+            printf("steal_percent=0.0\n");
+            printf("guest_percent=0.0\n");
+            printf("guest_nice_percent=0.0\n");
             printf("procs_running=%d\n", running);
             printf("procs_blocked=%d\n", blocked);
         }
         return 0;
     }
 
-    double usage = (double)(total - d_idle) / (double)total;
-    int usage_pct = (int)(usage * 100.0 + 0.5);
+    double usage_pct = (double)(total - d_idle) / (double)total * 100.0;
 
-    int user_pct = (int)((double)d_user_real / (double)total * 100.0 + 0.5);
-    int nice_pct = (int)((double)d_nice_real / (double)total * 100.0 + 0.5);
-    int system_pct = (int)((double)d_system / (double)total * 100.0 + 0.5);
-    int idle_pct = (int)((double)d_idle / (double)total * 100.0 + 0.5);
-    int iowait_pct = (int)((double)d_iowait / (double)total * 100.0 + 0.5);
-    int irq_pct = (int)((double)d_irq / (double)total * 100.0 + 0.5);
-    int softirq_pct = (int)((double)d_softirq / (double)total * 100.0 + 0.5);
-    int steal_pct = (int)((double)d_steal / (double)total * 100.0 + 0.5);
-    int guest_pct = (int)((double)d_guest / (double)total * 100.0 + 0.5);
-    int guest_nice_pct =
-        (int)((double)d_guest_nice / (double)total * 100.0 + 0.5);
+    double user_pct = (double)d_user_real / (double)total * 100.0;
+    double nice_pct = (double)d_nice_real / (double)total * 100.0;
+    double system_pct = (double)d_system / (double)total * 100.0;
+    double idle_pct = (double)d_idle / (double)total * 100.0;
+    double iowait_pct = (double)d_iowait / (double)total * 100.0;
+    double irq_pct = (double)d_irq / (double)total * 100.0;
+    double softirq_pct = (double)d_softirq / (double)total * 100.0;
+    double steal_pct = (double)d_steal / (double)total * 100.0;
+    double guest_pct = (double)d_guest / (double)total * 100.0;
+    double guest_nice_pct = (double)d_guest_nice / (double)total * 100.0;
 
     const char *status;
-    if (usage >= thresh_crit)
+    if (usage_pct >= thresh_crit)
         status = "critical";
-    else if (usage >= thresh_warn)
+    else if (usage_pct >= thresh_warn)
         status = "warning";
     else
         status = "ok";
 
     printf("status=%s\n", status);
-    printf("usage_percent=%d\n", usage_pct);
-    printf("user_percent=%d\n", user_pct);
-    printf("system_percent=%d\n", system_pct);
-    printf("idle_percent=%d\n", idle_pct);
-    printf("iowait_percent=%d\n", iowait_pct);
+    printf("usage_percent=%.1f\n", usage_pct);
+    printf("user_percent=%.1f\n", user_pct);
+    printf("system_percent=%.1f\n", system_pct);
+    printf("idle_percent=%.1f\n", idle_pct);
+    printf("iowait_percent=%.1f\n", iowait_pct);
     printf("cores=%d\n", cores);
 
     if (advanced) {
-        printf("nice_percent=%d\n", nice_pct);
-        printf("irq_percent=%d\n", irq_pct);
-        printf("softirq_percent=%d\n", softirq_pct);
-        printf("steal_percent=%d\n", steal_pct);
-        printf("guest_percent=%d\n", guest_pct);
-        printf("guest_nice_percent=%d\n", guest_nice_pct);
+        printf("nice_percent=%.1f\n", nice_pct);
+        printf("irq_percent=%.1f\n", irq_pct);
+        printf("softirq_percent=%.1f\n", softirq_pct);
+        printf("steal_percent=%.1f\n", steal_pct);
+        printf("guest_percent=%.1f\n", guest_pct);
+        printf("guest_nice_percent=%.1f\n", guest_nice_pct);
         printf("procs_running=%d\n", running);
         printf("procs_blocked=%d\n", blocked);
     }

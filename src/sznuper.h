@@ -23,7 +23,7 @@ static inline int parse_bool(const char *env_key) {
     return 1;
 }
 
-/* Parse a HEALTHCHECK_ARG_* env var as a float threshold (0.0-1.0).
+/* Parse a HEALTHCHECK_ARG_* env var as a percentage threshold (0-100).
  * Returns fallback if unset or out of range. */
 static inline double parse_threshold(const char *env_key, double fallback) {
     const char *val = getenv(env_key);
@@ -31,7 +31,7 @@ static inline double parse_threshold(const char *env_key, double fallback) {
         return fallback;
     char *end;
     double d = strtod(val, &end);
-    if (end == val || d < 0.0 || d > 1.0)
+    if (end == val || d < 0.0 || d > 100.0)
         return fallback;
     return d;
 }

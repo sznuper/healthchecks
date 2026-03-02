@@ -7,20 +7,20 @@
  * reclaimable memory.
  *
  * Args (via environment):
- *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT - Warning threshold as percentage 0-100 (default: 80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT - Critical threshold as percentage 0-100 (default: 95)
  *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
  *
  * Output (basic):
  *   status            - ok, warning, or critical
- *   usage_percent     - Memory usage percentage as integer (0-100)
+ *   usage_percent     - Memory usage percentage as float (0-100)
  *   total             - MemTotal (human-readable, or raw bytes if RAW set)
  *   used              - MemTotal - MemAvailable (human-readable, or raw bytes)
  *   available         - MemAvailable, free + reclaimable (human-readable, or raw bytes)
  *   swap_total        - SwapTotal (human-readable, or raw bytes)
  *   swap_used         - SwapTotal - SwapFree (human-readable, or raw bytes)
- *   swap_usage_percent - Swap usage percentage as integer (0-100)
+ *   swap_usage_percent - Swap usage percentage as float (0-100)
  *
  * Output (advanced adds):
  *   free              - MemFree, truly unused (human-readable, or raw bytes)
@@ -32,8 +32,8 @@
  *   (plus all remaining /proc/meminfo fields as lowercase keys)
  *
  * Status logic:
- *   usage >= threshold_crit -> critical
- *   usage >= threshold_warn -> warning
+ *   usage >= threshold_crit_percent -> critical
+ *   usage >= threshold_warn_percent -> warning
  *   otherwise               -> ok
  */
 
@@ -66,8 +66,8 @@ struct meminfo_entry {
 };
 
 int main() {
-    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT", 80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT", 95);
 
     int raw = parse_bool("HEALTHCHECK_ARG_RAW");
     int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
@@ -136,29 +136,27 @@ int main() {
 
     /* /proc/meminfo values are in kB — convert to bytes for format_bytes */
     unsigned long long used_kb = mem_total - mem_available;
-    double usage = (double)used_kb / (double)mem_total;
-    int usage_pct = (int)(usage * 100.0 + 0.5);
+    double usage_pct = (double)used_kb / (double)mem_total * 100.0;
 
     unsigned long long swap_used = (swap_total >= swap_free) ? swap_total - swap_free : 0;
-    double swap_usage = (swap_total > 0) ? (double)swap_used / (double)swap_total : 0.0;
-    int swap_usage_pct = (int)(swap_usage * 100.0 + 0.5);
+    double swap_usage_pct = (swap_total > 0) ? (double)swap_used / (double)swap_total * 100.0 : 0.0;
 
     const char *status;
-    if (usage >= thresh_crit)
+    if (usage_pct >= thresh_crit)
         status = "critical";
-    else if (usage >= thresh_warn)
+    else if (usage_pct >= thresh_warn)
         status = "warning";
     else
         status = "ok";
 
     printf("status=%s\n", status);
-    printf("usage_percent=%d\n", usage_pct);
+    printf("usage_percent=%.1f\n", usage_pct);
     emit_bytes("total", mem_total * 1024, raw);
     emit_bytes("used", used_kb * 1024, raw);
     emit_bytes("available", mem_available * 1024, raw);
     emit_bytes("swap_total", swap_total * 1024, raw);
     emit_bytes("swap_used", swap_used * 1024, raw);
-    printf("swap_usage_percent=%d\n", swap_usage_pct);
+    printf("swap_usage_percent=%.1f\n", swap_usage_pct);
 
     if (advanced) {
         emit_bytes("free", mem_free * 1024, raw);

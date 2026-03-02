@@ -3,15 +3,15 @@
  *
  * Args (via environment):
  *   HEALTHCHECK_ARG_MOUNT          - Mount point to check (default: "/")
- *   HEALTHCHECK_ARG_THRESHOLD_WARN - Warning threshold as float 0.0-1.0 (default: 0.80)
- *   HEALTHCHECK_ARG_THRESHOLD_CRIT - Critical threshold as float 0.0-1.0 (default: 0.95)
+ *   HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT - Warning threshold as percentage 0-100 (default: 80)
+ *   HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT - Critical threshold as percentage 0-100 (default: 95)
  *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (free, inode stats)
  *
  * Output (basic):
  *   status           - ok, warning, or critical
  *   mount            - The mount point checked
- *   usage_percent    - Usage percentage as integer (0-100)
+ *   usage_percent    - Usage percentage as float (0-100)
  *   total            - Total disk space (human-readable, or raw bytes if RAW set)
  *   used             - Used disk space (human-readable, or raw bytes)
  *   available        - Available disk space for non-root (human-readable, or raw bytes)
@@ -22,14 +22,14 @@
  *   inodes_used      - Used inodes
  *   inodes_free      - Free inodes including root-reserved
  *   inodes_available - Available inodes for non-root
- *   inodes_usage_percent - Inode usage percentage as integer (0-100)
+ *   inodes_usage_percent - Inode usage percentage as float (0-100)
  *
  * Note: Filesystems like btrfs do not expose inode counts via statvfs.
  * On these filesystems all inode fields will be 0 — this is expected.
  *
  * Status logic:
- *   usage >= threshold_crit -> critical
- *   usage >= threshold_warn -> warning
+ *   usage >= threshold_crit_percent -> critical
+ *   usage >= threshold_warn_percent -> warning
  *   otherwise               -> ok
  */
 
@@ -43,8 +43,8 @@ int main() {
     if (!mount)
         mount = "/";
 
-    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN", 0.80);
-    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT", 0.95);
+    double thresh_warn = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT", 80);
+    double thresh_crit = parse_threshold("HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT", 95);
 
     int raw = parse_bool("HEALTHCHECK_ARG_RAW");
     int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
@@ -62,8 +62,7 @@ int main() {
 
     /* usage = used / (used + available), matching df behavior */
     unsigned long long nonroot_total = used + avail;
-    double usage = (nonroot_total > 0) ? (double)used / (double)nonroot_total : 0.0;
-    int usage_pct = (int)(usage * 100.0 + 0.5);
+    double usage_pct = (nonroot_total > 0) ? (double)used / (double)nonroot_total * 100.0 : 0.0;
 
     unsigned long long inodes_total = fs.f_files;
     unsigned long long inodes_free = fs.f_ffree;
@@ -71,21 +70,20 @@ int main() {
     unsigned long long inodes_used = inodes_total - inodes_free;
     /* same df-style denominator for inodes */
     unsigned long long inodes_nonroot = inodes_used + inodes_avail;
-    double inode_usage =
-        (inodes_nonroot > 0) ? (double)inodes_used / (double)inodes_nonroot : 0.0;
-    int inode_usage_pct = (int)(inode_usage * 100.0 + 0.5);
+    double inode_usage_pct =
+        (inodes_nonroot > 0) ? (double)inodes_used / (double)inodes_nonroot * 100.0 : 0.0;
 
     const char *status;
-    if (usage >= thresh_crit)
+    if (usage_pct >= thresh_crit)
         status = "critical";
-    else if (usage >= thresh_warn)
+    else if (usage_pct >= thresh_warn)
         status = "warning";
     else
         status = "ok";
 
     printf("status=%s\n", status);
     printf("mount=%s\n", mount);
-    printf("usage_percent=%d\n", usage_pct);
+    printf("usage_percent=%.1f\n", usage_pct);
     emit_bytes("total", total, raw);
     emit_bytes("used", used, raw);
     emit_bytes("available", avail, raw);
@@ -96,7 +94,7 @@ int main() {
         printf("inodes_used=%llu\n", inodes_used);
         printf("inodes_free=%llu\n", inodes_free);
         printf("inodes_available=%llu\n", inodes_avail);
-        printf("inodes_usage_percent=%d\n", inode_usage_pct);
+        printf("inodes_usage_percent=%.1f\n", inode_usage_pct);
     }
 
     return 0;

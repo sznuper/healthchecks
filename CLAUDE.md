@@ -11,7 +11,7 @@ Each healthcheck is a standalone C program compiled with [Cosmopolitan Libc](htt
 Every healthcheck follows this protocol:
 
 **Input:**
-- Args via environment variables: `HEALTHCHECK_ARG_<KEY>` (uppercase). Config keys like `threshold_warn` become `HEALTHCHECK_ARG_THRESHOLD_WARN`.
+- Args via environment variables: `HEALTHCHECK_ARG_<KEY>` (uppercase). Config keys like `threshold_warn_percent` become `HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT`.
 - Daemon metadata: `HEALTHCHECK_TRIGGER` (always), `HEALTHCHECK_FILE` and `HEALTHCHECK_LINE_COUNT` (watch triggers only).
 - Stdin: new lines from watched file (watch triggers) or empty (interval/cron).
 
@@ -23,7 +23,7 @@ Every healthcheck follows this protocol:
 Example output:
 ```
 status=warning
-usage_percent=84
+usage_percent=84.3
 available=8G
 ```
 
@@ -65,8 +65,8 @@ Each healthcheck compiles to a single portable binary with no libc dependency.
 - One `.c` file per healthcheck, no shared libraries. Common utilities live in `sznuper.h` (header-only, `static inline`).
 - Use `printf("key=value\n")` for output — no JSON, no fancy formatting.
 - Document args, outputs, and status logic in a comment block at the top of each file.
-- Threshold args should be floats (0.0–1.0) for percentages.
-- Percentage output keys use the `_percent` suffix (e.g., `usage_percent=84`, `swap_usage_percent=12`).
+- Threshold args should be floats in 0-100 range for percentages.
+- Percentage output keys use the `_percent` suffix as floats in 0-100 range (e.g., `usage_percent=84.3`, `swap_usage_percent=12.0`).
 - Human-readable values in output by default (e.g., `available=8G`). When `HEALTHCHECK_ARG_RAW` is set, emit raw byte integers instead (e.g., `available=8589934592`).
 
 ## Standard optional args
@@ -81,7 +81,7 @@ These args are recognized across all healthchecks for consistent behavior:
 Run a healthcheck manually by setting its env vars:
 
 ```bash
-HEALTHCHECK_ARG_THRESHOLD_WARN=0.80 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.95 HEALTHCHECK_ARG_MOUNT=/ ./disk_usage
+HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=80 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=95 HEALTHCHECK_ARG_MOUNT=/ ./disk_usage
 ```
 
 Verify output is valid `key=value` lines with a `status` key.

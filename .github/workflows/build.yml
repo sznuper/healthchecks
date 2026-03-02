@@ -71,7 +71,7 @@ jobs:
 
       - name: Test disk_usage with custom thresholds
         run: |
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.01 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.02 HEALTHCHECK_ARG_MOUNT=/ sh ./build/disk_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=1 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=2 HEALTHCHECK_ARG_MOUNT=/ sh ./build/disk_usage)
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
 
@@ -144,7 +144,7 @@ jobs:
           # Generate CPU load so the sample always sees non-zero ticks
           while :; do :; done &
           LOAD_PID=$!
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN=0.001 HEALTHCHECK_ARG_THRESHOLD_CRIT=0.002 HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
+          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=0.1 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=0.2 HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
           kill $LOAD_PID 2>/dev/null || true
           echo "$output"
           echo "$output" | grep -q "^status=critical$"
