@@ -321,31 +321,43 @@ int main(void) {
             events[event_count++] = ev;
     }
 
-    /* Determine status */
-    const char *status = "ok";
-    if (do_alert_failure) {
-        if (failure_count >= thresh_crit)
-            status = "critical";
-        else if (failure_count >= thresh_warn)
-            status = "warning";
-    }
-    if (do_alert_login && login_count > 0) {
-        if (strcmp(status, "critical") != 0)
-            status = "warning";
+    if (event_count == 0) {
+        /* No events: single-record ok output (no separators). */
+        printf("status=ok\n");
+        printf("event_count=0\n");
+        printf("failure_count=0\n");
+        printf("login_count=0\n");
+        return 0;
     }
 
-    printf("status=%s\n", status);
+    /*
+     * Determine per-record status for failure and login events based on
+     * the batch totals. Individual records inherit the batch severity.
+     */
+    const char *failure_status = "ok";
+    if (do_alert_failure) {
+        if (failure_count >= thresh_crit)
+            failure_status = "critical";
+        else if (failure_count >= thresh_warn)
+            failure_status = "warning";
+    }
+    const char *login_status = do_alert_login ? "warning" : "ok";
+
+    /* Global section: batch-level context. */
     printf("event_count=%d\n", event_count);
     printf("failure_count=%ld\n", failure_count);
     printf("login_count=%ld\n", login_count);
 
-    if (event_count > 0) {
-        printf("event=%s\n", first_type == EV_FAILURE ? "failure" : "login");
-        printf("user=%s\n", first_user);
-        printf("host=%s\n", first_host);
-        emit_strarray("events", &event_types);
-        emit_strarray("users", &users);
-        emit_strarray("hosts", &hosts);
+    /* Records array. */
+    printf("--- records\n");
+    for (int i = 0; i < event_count; i++) {
+        if (i > 0)
+            printf("--- record\n");
+        const char *rec_status = events[i].type == EV_FAILURE ? failure_status : login_status;
+        printf("status=%s\n", rec_status);
+        printf("event=%s\n", events[i].type == EV_FAILURE ? "failure" : "login");
+        printf("user=%s\n", events[i].user);
+        printf("host=%s\n", events[i].host);
     }
 
     return 0;
