@@ -55,19 +55,16 @@ fi
 
 # ── Create VPS ───────────────────────────────────────────────────────────────
 
-log "Creating VPS..."
-# shellcheck source=create-server.sh
-source <("$SCRIPT_DIR/create-server.sh")
-# SERVER_ID and SERVER_IP are now exported by create-server.sh
-
-SERVER_ID="${SERVER_ID:?create-server.sh did not set SERVER_ID}"
-SERVER_IP="${SERVER_IP:?create-server.sh did not set SERVER_IP}"
+SERVER_ID=""
+SERVER_IP=""
 
 cleanup() {
     echo ""
     if [[ "$KEEP" -eq 0 ]]; then
-        log "Deleting server $SERVER_ID..."
-        "$SCRIPT_DIR/delete-server.sh" "$SERVER_ID"
+        if [[ -n "$SERVER_ID" ]]; then
+            log "Deleting server $SERVER_ID..."
+            "$SCRIPT_DIR/delete-server.sh" "$SERVER_ID"
+        fi
     else
         log "Server kept alive."
         echo "  SERVER_ID=$SERVER_ID"
@@ -77,6 +74,13 @@ cleanup() {
     fi
 }
 trap cleanup EXIT INT TERM
+
+log "Creating VPS..."
+# shellcheck source=create-server.sh
+source <("$SCRIPT_DIR/create-server.sh")
+
+SERVER_ID="${SERVER_ID:?create-server.sh did not set SERVER_ID}"
+SERVER_IP="${SERVER_IP:?create-server.sh did not set SERVER_IP}"
 
 # ── Run healthchecks ─────────────────────────────────────────────────────────
 
