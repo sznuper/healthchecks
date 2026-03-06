@@ -13,31 +13,80 @@ Every healthcheck follows this protocol:
 **Input:**
 - Args via environment variables: `HEALTHCHECK_ARG_<KEY>` (uppercase). Config keys like `threshold_warn_percent` become `HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT`.
 - Daemon metadata: `HEALTHCHECK_TRIGGER` (always), `HEALTHCHECK_FILE` and `HEALTHCHECK_LINE_COUNT` (watch triggers only).
-- Stdin: new lines from watched file (watch triggers) or empty (interval/cron).
+- Stdin: new bytes from watched file (watch triggers), stdout of pipe command (pipe triggers), or empty (interval/cron).
 
 **Output:**
 - `key=value` pairs on stdout, one per line, lowercase keys.
-- `status` key is **required**: must be `ok`, `warning`, or `critical`.
+- `status` key is **required** in every record: must be `ok`, `warning`, or `critical`.
 - Split on first `=` only. Lines without `=` are ignored.
 
-Example output:
+**Single-record output** (interval/cron/watch healthchecks):
 ```
 status=warning
 usage_percent=84.3
 available=8G
 ```
 
+**Multi-record output** (pipe healthchecks that process a batch of events):
+
+Two structural tokens control the format, matched as exact trimmed lines:
+
+| Token          | Meaning                                              |
+|----------------|------------------------------------------------------|
+| `--- records`  | Ends the global props section; starts the records array |
+| `--- record`   | Starts the next record within the array              |
+
+```
+event_count=3
+failure_count=2
+login_count=1
+--- records
+status=warning
+event=failure
+user=admin
+host=1.2.3.4
+timestamp=2026-03-05T13:55:05Z
+--- record
+status=warning
+event=failure
+user=test
+host=1.2.3.4
+timestamp=2026-03-05T13:55:06Z
+--- record
+status=ok
+event=login
+user=root
+host=83.22.197.254
+timestamp=2026-03-05T13:55:07Z
+```
+
+Everything before `--- records` is the **global section** — batch-level context (counts,
+summaries). It is not itself a notification; its fields are merged into every record's
+template data. Each block after `--- records` / `--- record` is an independent record
+processed through its own status check, cooldown, and template render.
+
 ## Project structure
 
 ```
 src/
   sznuper.h         # shared utilities (header-only, no link dependency)
-  disk_usage.c
-  cpu_usage.c
-  memory_usage.c
-  ssh_login.c
-  systemd_unit.c
+  cpu_usage.c       # interval trigger
+  disk_usage.c      # interval trigger
+  memory_usage.c    # interval trigger
+  ssh_login.c       # interval trigger — reads /var/log/wtmp + /var/log/btmp
+  ssh_btmp.c        # watch trigger  — /var/log/btmp bytes on stdin
+  ssh_wtmp.c        # watch trigger  — /var/log/wtmp bytes on stdin
+  ssh_journal.c     # pipe trigger   — journalctl --output=json on stdin
 Makefile
+docs/
+  testing.md        # VPS testing with dev/ scripts
+dev/
+  .env.example
+  create-server.sh
+  delete-server.sh
+  run-binary.sh
+  test-on-vps.sh
+  test-ssh-journal.sh
 ```
 
 ## Build
@@ -45,8 +94,8 @@ Makefile
 Requires the `cosmocc` toolchain. See https://cosmo.zip/pub/cosmocc/ for setup.
 
 ```bash
-make            # build all healthchecks
-make disk_usage # build one healthcheck
+make                    # build all healthchecks
+make build/disk_usage   # build one healthcheck
 make clean
 ```
 
@@ -81,10 +130,11 @@ These args are recognized across all healthchecks for consistent behavior:
 Run a healthcheck manually by setting its env vars:
 
 ```bash
-HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=80 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=95 HEALTHCHECK_ARG_MOUNT=/ ./disk_usage
+HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=80 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=95 HEALTHCHECK_ARG_MOUNT=/ ./build/disk_usage
 ```
 
-Verify output is valid `key=value` lines with a `status` key.
+Verify output is valid `key=value` lines with a `status` key. For testing on a real
+server see `docs/testing.md`.
 
 ## Do not
 

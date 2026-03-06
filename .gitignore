@@ -58,3 +58,6 @@ Mkfile.old
 dkms.conf
 
 # End of https://www.toptal.com/developers/gitignore/api/c
+
+# Local dev environment
+dev/.env

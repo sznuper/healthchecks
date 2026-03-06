@@ -1,19 +1,19 @@
 /*
- * ssh_journal - Detect SSH auth events from journalctl --output=cat stdin.
+ * ssh_journal - Detect SSH auth events from journalctl --output=json stdin.
  *
- * Reads stdin line by line (journalctl -f --output=cat output). Parses SSH
+ * Reads stdin line by line (journalctl -f --output=json output). Parses SSH
  * failure and login events in real time. Designed for the pipe trigger:
  *
  *   - name: ssh_failures
  *     healthcheck: file://ssh_journal
  *     trigger:
- *       pipe: "journalctl -f -u ssh -u sshd --output=cat --no-pager"
+ *       pipe: "journalctl -f -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
  *     args:
  *       alert_on: failure
  *       threshold_warn_count: 1
  *       threshold_crit_count: 20
  *     template: |
- *       SSH failure: {{ healthcheck.user }} from {{ healthcheck.host }}
+ *       SSH {{ healthcheck.event }}: {{ healthcheck.user }} from {{ healthcheck.host }} at {{ healthcheck.timestamp }}
  *     notify:
  *       - telegram
  *
@@ -24,6 +24,11 @@
  *                                           "both":   either condition triggers non-ok
  *   HEALTHCHECK_ARG_THRESHOLD_WARN_COUNT  - Failure count for warning  (default: 1)
  *   HEALTHCHECK_ARG_THRESHOLD_CRIT_COUNT  - Failure count for critical (default: 20)
+ *   HEALTHCHECK_ARG_ADVANCED              - When set, emit all extra JSON fields per record
+ *
+ * Input format: JSON lines from journalctl --output=json.
+ * Required fields per line: MESSAGE, __REALTIME_TIMESTAMP.
+ * Non-JSON lines (not starting with '{') are silently skipped.
  *
  * Patterns matched (no double-counting):
  *   "Invalid user USER from HOST"                                -> failure
@@ -39,12 +44,13 @@
  *   event_count=N
  *   failure_count=N
  *   login_count=N
- *   event=failure          (first matching event type)
+ *   --- records
+ *   status=warning|critical   (per record)
+ *   event=failure|login
  *   user=USER
  *   host=HOST
- *   events=["failure","login"]
- *   users=["admin","root"]
- *   hosts=["1.2.3.4","5.6.7.8"]
+ *   timestamp=YYYY-MM-DDTHH:MM:SSZ
+ *   [extra fields if advanced=1]
  *
  * Output (no matches):
  *   status=ok
@@ -68,8 +74,10 @@
  */
 
 #include "sznuper.h"
+#include <time.h>
 
-#define MAX_EVENTS 1024
+#define MAX_LINE   4096
+#define MAX_EVENTS 256
 #define MAX_STR    256
 
 /* Parsed event */
@@ -80,6 +88,8 @@ struct event {
     int  type; /* EV_FAILURE or EV_LOGIN */
     char user[MAX_STR];
     char host[MAX_STR];
+    char timestamp[32];      /* "2026-03-05T13:55:05Z" */
+    char raw_json[MAX_LINE]; /* full JSON line, stored only when advanced=1 */
 };
 
 /* Dynamic string set (deduplication for output arrays) */
@@ -104,28 +114,149 @@ static int strset_add(struct strset *s, const char *str) {
 }
 
 /*
- * Emit a JSON string array: key=["a","b","c"]
- * Items are JSON-escaped minimally (backslash and double-quote only).
+ * Extract a JSON string value for the given key from a compact JSON object line.
+ * Pattern: "KEY":"VALUE"
+ * Handles escape sequences: \", \\, \/, \n, \r, \t.
+ * Returns 1 on success, 0 if key not found or buffer too small.
  */
-static void emit_strarray(const char *key, struct strset *s) {
-    printf("%s=[", key);
-    for (int i = 0; i < s->count; i++) {
-        if (i > 0)
-            putchar(',');
-        putchar('"');
-        for (const char *p = s->items[i]; *p; p++) {
-            if (*p == '"' || *p == '\\')
-                putchar('\\');
-            putchar(*p);
+static int json_str(const char *json, const char *key, char *buf, size_t bufsz) {
+    char pat[MAX_STR + 4];
+    snprintf(pat, sizeof(pat), "\"%s\":\"", key);
+    const char *p = strstr(json, pat);
+    if (!p)
+        return 0;
+    p += strlen(pat);
+
+    size_t i = 0;
+    while (*p && *p != '"') {
+        if (*p == '\\') {
+            p++;
+            if (!*p)
+                break;
+            char c;
+            switch (*p) {
+                case '"':  c = '"';  break;
+                case '\\': c = '\\'; break;
+                case '/':  c = '/';  break;
+                case 'n':  c = '\n'; break;
+                case 'r':  c = '\r'; break;
+                case 't':  c = '\t'; break;
+                default:   c = *p;   break;
+            }
+            if (i + 1 >= bufsz)
+                return 0;
+            buf[i++] = c;
+        } else {
+            if (i + 1 >= bufsz)
+                return 0;
+            buf[i++] = *p;
         }
-        putchar('"');
+        p++;
     }
-    puts("]");
+    if (*p != '"')
+        return 0;
+    buf[i] = '\0';
+    return 1;
 }
 
 /*
- * Parse one journalctl --output=cat line.
- * Returns 1 if matched, 0 otherwise. Fills ev on match.
+ * Convert __REALTIME_TIMESTAMP (microseconds since epoch, decimal string)
+ * to "YYYY-MM-DDTHH:MM:SSZ". Writes to buf.
+ */
+static void format_ts(const char *usec_str, char *buf, size_t bufsz) {
+    unsigned long long usec = strtoull(usec_str, NULL, 10);
+    time_t sec = (time_t)(usec / 1000000ULL);
+    struct tm *tm = gmtime(&sec);
+    if (!tm) {
+        strncpy(buf, usec_str, bufsz - 1);
+        buf[bufsz - 1] = '\0';
+        return;
+    }
+    strftime(buf, bufsz, "%Y-%m-%dT%H:%M:%SZ", tm);
+}
+
+/*
+ * Emit all "KEY":"VALUE" pairs in the JSON line, skipping keys in skip[].
+ * Key names are emitted as-is. Non-string values are skipped silently.
+ */
+static void emit_extra_fields(const char *json, const char **skip, int n_skip) {
+    const char *p = json;
+    if (*p == '{') p++;
+
+    while (*p && *p != '}') {
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p != '"') break;
+        p++; /* skip opening quote of key */
+
+        const char *key_start = p;
+        while (*p && *p != '"') p++;
+        if (*p != '"') break;
+        size_t klen = (size_t)(p - key_start);
+        p++; /* skip closing quote of key */
+
+        while (*p == ' ') p++;
+        if (*p != ':') break;
+        p++;
+        while (*p == ' ') p++;
+
+        if (*p != '"') {
+            /* Non-string value — skip to next separator */
+            while (*p && *p != ',' && *p != '}') p++;
+            if (*p == ',') p++;
+            continue;
+        }
+        p++; /* skip opening quote of value */
+
+        char val[MAX_LINE];
+        size_t vi = 0;
+        while (*p && *p != '"') {
+            if (*p == '\\') {
+                p++;
+                if (!*p) break;
+                char c;
+                switch (*p) {
+                    case '"':  c = '"';  break;
+                    case '\\': c = '\\'; break;
+                    case '/':  c = '/';  break;
+                    case 'n':  c = '\n'; break;
+                    case 'r':  c = '\r'; break;
+                    case 't':  c = '\t'; break;
+                    default:   c = *p;   break;
+                }
+                if (vi + 1 < sizeof(val))
+                    val[vi++] = c;
+            } else {
+                if (vi + 1 < sizeof(val))
+                    val[vi++] = *p;
+            }
+            p++;
+        }
+        if (*p == '"') p++; /* skip closing quote of value */
+        val[vi] = '\0';
+
+        int should_skip = 0;
+        for (int i = 0; i < n_skip; i++) {
+            if (strlen(skip[i]) == klen && memcmp(skip[i], key_start, klen) == 0) {
+                should_skip = 1;
+                break;
+            }
+        }
+        if (!should_skip) {
+            char key[MAX_STR];
+            if (klen >= MAX_STR) klen = MAX_STR - 1;
+            memcpy(key, key_start, klen);
+            key[klen] = '\0';
+            printf("%s=%s\n", key, val);
+        }
+
+        while (*p == ' ') p++;
+        if (*p == ',') p++;
+    }
+}
+
+/*
+ * Parse one SSH log message (the MESSAGE field content).
+ * Returns 1 if matched, 0 otherwise. Fills ev->type, ev->user, ev->host on match.
  *
  * Patterns:
  *   "Invalid user USER from HOST"
@@ -136,40 +267,31 @@ static void emit_strarray(const char *key, struct strset *s) {
  * Skipped (double-count avoidance):
  *   "Connection closed by invalid user ..."
  */
-static int parse_line(const char *line, struct event *ev) {
+static int parse_message(const char *line, struct event *ev) {
     const char *p;
 
     /* --- failure: Invalid user USER from HOST --- */
     p = strstr(line, "Invalid user ");
     if (p) {
-        /* Skip "Connection closed by invalid user" variant */
         if (strstr(line, "Connection closed by invalid user"))
             return 0;
 
         p += strlen("Invalid user ");
-        /* USER is up to next space */
         const char *user_end = strchr(p, ' ');
-        if (!user_end)
-            return 0;
+        if (!user_end) return 0;
         size_t ulen = (size_t)(user_end - p);
-        if (ulen == 0 || ulen >= MAX_STR)
-            return 0;
+        if (ulen == 0 || ulen >= MAX_STR) return 0;
 
-        /* " from HOST" */
         const char *from = strstr(user_end, " from ");
-        if (!from)
-            return 0;
+        if (!from) return 0;
         from += strlen(" from ");
         const char *host_end = strchr(from, ' ');
         size_t hlen = host_end ? (size_t)(host_end - from) : strlen(from);
-        if (hlen == 0 || hlen >= MAX_STR)
-            return 0;
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
 
         ev->type = EV_FAILURE;
-        memcpy(ev->user, p, ulen);
-        ev->user[ulen] = '\0';
-        memcpy(ev->host, from, hlen);
-        ev->host[hlen] = '\0';
+        memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
+        memcpy(ev->host, from, hlen); ev->host[hlen] = '\0';
         return 1;
     }
 
@@ -178,28 +300,20 @@ static int parse_line(const char *line, struct event *ev) {
     if (p) {
         p += strlen("Connection closed by authenticating user ");
         const char *user_end = strchr(p, ' ');
-        if (!user_end)
-            return 0;
+        if (!user_end) return 0;
         size_t ulen = (size_t)(user_end - p);
-        if (ulen == 0 || ulen >= MAX_STR)
-            return 0;
+        if (ulen == 0 || ulen >= MAX_STR) return 0;
 
-        /* HOST follows USER, terminated by space */
         const char *host_start = user_end + 1;
         const char *host_end   = strchr(host_start, ' ');
         size_t hlen = host_end ? (size_t)(host_end - host_start) : strlen(host_start);
-        if (hlen == 0 || hlen >= MAX_STR)
-            return 0;
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
 
-        /* Must have [preauth] somewhere after */
-        if (!strstr(line, "[preauth]"))
-            return 0;
+        if (!strstr(line, "[preauth]")) return 0;
 
         ev->type = EV_FAILURE;
-        memcpy(ev->user, p, ulen);
-        ev->user[ulen] = '\0';
-        memcpy(ev->host, host_start, hlen);
-        ev->host[hlen] = '\0';
+        memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
+        memcpy(ev->host, host_start, hlen); ev->host[hlen] = '\0';
         return 1;
     }
 
@@ -208,26 +322,20 @@ static int parse_line(const char *line, struct event *ev) {
     if (p) {
         p += strlen("Accepted publickey for ");
         const char *user_end = strchr(p, ' ');
-        if (!user_end)
-            return 0;
+        if (!user_end) return 0;
         size_t ulen = (size_t)(user_end - p);
-        if (ulen == 0 || ulen >= MAX_STR)
-            return 0;
+        if (ulen == 0 || ulen >= MAX_STR) return 0;
 
         const char *from = strstr(user_end, " from ");
-        if (!from)
-            return 0;
+        if (!from) return 0;
         from += strlen(" from ");
         const char *host_end = strchr(from, ' ');
         size_t hlen = host_end ? (size_t)(host_end - from) : strlen(from);
-        if (hlen == 0 || hlen >= MAX_STR)
-            return 0;
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
 
         ev->type = EV_LOGIN;
-        memcpy(ev->user, p, ulen);
-        ev->user[ulen] = '\0';
-        memcpy(ev->host, from, hlen);
-        ev->host[hlen] = '\0';
+        memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
+        memcpy(ev->host, from, hlen); ev->host[hlen] = '\0';
         return 1;
     }
 
@@ -236,26 +344,20 @@ static int parse_line(const char *line, struct event *ev) {
     if (p) {
         p += strlen("Accepted password for ");
         const char *user_end = strchr(p, ' ');
-        if (!user_end)
-            return 0;
+        if (!user_end) return 0;
         size_t ulen = (size_t)(user_end - p);
-        if (ulen == 0 || ulen >= MAX_STR)
-            return 0;
+        if (ulen == 0 || ulen >= MAX_STR) return 0;
 
         const char *from = strstr(user_end, " from ");
-        if (!from)
-            return 0;
+        if (!from) return 0;
         from += strlen(" from ");
         const char *host_end = strchr(from, ' ');
         size_t hlen = host_end ? (size_t)(host_end - from) : strlen(from);
-        if (hlen == 0 || hlen >= MAX_STR)
-            return 0;
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
 
         ev->type = EV_LOGIN;
-        memcpy(ev->user, p, ulen);
-        ev->user[ulen] = '\0';
-        memcpy(ev->host, from, hlen);
-        ev->host[hlen] = '\0';
+        memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
+        memcpy(ev->host, from, hlen); ev->host[hlen] = '\0';
         return 1;
     }
 
@@ -266,30 +368,25 @@ int main(void) {
     const char *alert_on  = parse_string("HEALTHCHECK_ARG_ALERT_ON", "failure");
     long thresh_warn      = parse_int("HEALTHCHECK_ARG_THRESHOLD_WARN_COUNT", 1);
     long thresh_crit      = parse_int("HEALTHCHECK_ARG_THRESHOLD_CRIT_COUNT", 20);
+    int  advanced         = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
     int do_alert_failure = (strcmp(alert_on, "failure") == 0 ||
                             strcmp(alert_on, "both")    == 0);
     int do_alert_login   = (strcmp(alert_on, "login")   == 0 ||
                             strcmp(alert_on, "both")    == 0);
 
-    struct event events[MAX_EVENTS];
-    int          event_count   = 0;
-    long         failure_count = 0;
-    long         login_count   = 0;
-
-    /* First matched event (for scalar event= / user= / host= output) */
-    int          first_set  = 0;
-    int          first_type = EV_FAILURE;
-    char         first_user[MAX_STR] = "";
-    char         first_host[MAX_STR] = "";
+    static struct event events[MAX_EVENTS];
+    int  event_count   = 0;
+    long failure_count = 0;
+    long login_count   = 0;
+    int  validated     = 0; /* set after first JSON line passes field validation */
 
     struct strset event_types = {0};
     struct strset users       = {0};
     struct strset hosts       = {0};
 
-    char line[4096];
+    char line[MAX_LINE];
     while (fgets(line, sizeof(line), stdin)) {
-        /* Strip trailing newline */
         size_t len = strlen(line);
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
@@ -297,21 +394,46 @@ int main(void) {
         if (len == 0)
             continue;
 
-        struct event ev;
-        if (!parse_line(line, &ev))
+        /* Skip non-JSON lines silently */
+        if (line[0] != '{')
             continue;
+
+        /* Validate required fields on first JSON line encountered */
+        if (!validated) {
+            char check[MAX_STR];
+            if (!json_str(line, "MESSAGE", check, sizeof(check))) {
+                fprintf(stderr, "ssh_journal: JSON input missing required field: MESSAGE\n");
+                return 1;
+            }
+            if (!json_str(line, "__REALTIME_TIMESTAMP", check, sizeof(check))) {
+                fprintf(stderr, "ssh_journal: JSON input missing required field: __REALTIME_TIMESTAMP\n");
+                return 1;
+            }
+            validated = 1;
+        }
+
+        char msg[MAX_LINE];
+        char ts_raw[MAX_STR];
+        if (!json_str(line, "MESSAGE", msg, sizeof(msg)))
+            continue;
+        if (!json_str(line, "__REALTIME_TIMESTAMP", ts_raw, sizeof(ts_raw)))
+            continue;
+
+        struct event ev;
+        if (!parse_message(msg, &ev))
+            continue;
+
+        format_ts(ts_raw, ev.timestamp, sizeof(ev.timestamp));
+
+        if (advanced) {
+            strncpy(ev.raw_json, line, MAX_LINE - 1);
+            ev.raw_json[MAX_LINE - 1] = '\0';
+        }
 
         if (ev.type == EV_FAILURE)
             failure_count++;
         else
             login_count++;
-
-        if (!first_set) {
-            first_set  = 1;
-            first_type = ev.type;
-            strncpy(first_user, ev.user, MAX_STR - 1);
-            strncpy(first_host, ev.host, MAX_STR - 1);
-        }
 
         strset_add(&event_types, ev.type == EV_FAILURE ? "failure" : "login");
         strset_add(&users, ev.user);
@@ -322,7 +444,6 @@ int main(void) {
     }
 
     if (event_count == 0) {
-        /* No events: single-record ok output (no separators). */
         printf("status=ok\n");
         printf("event_count=0\n");
         printf("failure_count=0\n");
@@ -330,10 +451,6 @@ int main(void) {
         return 0;
     }
 
-    /*
-     * Determine per-record status for failure and login events based on
-     * the batch totals. Individual records inherit the batch severity.
-     */
     const char *failure_status = "ok";
     if (do_alert_failure) {
         if (failure_count >= thresh_crit)
@@ -343,12 +460,12 @@ int main(void) {
     }
     const char *login_status = do_alert_login ? "warning" : "ok";
 
-    /* Global section: batch-level context. */
     printf("event_count=%d\n", event_count);
     printf("failure_count=%ld\n", failure_count);
     printf("login_count=%ld\n", login_count);
 
-    /* Records array. */
+    const char *skip_keys[] = {"MESSAGE", "__REALTIME_TIMESTAMP"};
+
     printf("--- records\n");
     for (int i = 0; i < event_count; i++) {
         if (i > 0)
@@ -358,6 +475,9 @@ int main(void) {
         printf("event=%s\n", events[i].type == EV_FAILURE ? "failure" : "login");
         printf("user=%s\n", events[i].user);
         printf("host=%s\n", events[i].host);
+        printf("timestamp=%s\n", events[i].timestamp);
+        if (advanced)
+            emit_extra_fields(events[i].raw_json, skip_keys, 2);
     }
 
     return 0;
