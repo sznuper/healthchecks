@@ -25,12 +25,8 @@ for arg in "$@"; do
     esac
 done
 
-if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
-    echo "Error: dev/.env not found. Copy dev/.env.example and fill in the values." >&2
-    exit 1
-fi
 # shellcheck source=.env
-source "$SCRIPT_DIR/.env"
+[[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
 
 : "${HETZNER_API_TOKEN:?HETZNER_API_TOKEN must be set in .env}"
 : "${SSH_KEY:?SSH_KEY must be set in .env}"

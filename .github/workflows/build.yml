@@ -41,13 +41,6 @@ jobs:
           name: checks
           path: build/
 
-      - name: Write dev/.env
-        run: |
-          printf 'HETZNER_API_TOKEN=%s\nSSH_KEY=%s\n' \
-            "${{ secrets.HETZNER_API_TOKEN }}" \
-            "${{ secrets.HETZNER_SSH_KEY_NAME }}" \
-            > dev/.env
-
       - name: Install SSH key
         run: |
           mkdir -p ~/.ssh
@@ -58,6 +51,8 @@ jobs:
         run: ./dev/test-on-vps.sh --skip-build
         env:
           SERVER_NAME: hc-e2e-all
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
 
   vps-ssh-journal:
     needs: build
@@ -70,13 +65,6 @@ jobs:
           name: checks
           path: build/
 
-      - name: Write dev/.env
-        run: |
-          printf 'HETZNER_API_TOKEN=%s\nSSH_KEY=%s\n' \
-            "${{ secrets.HETZNER_API_TOKEN }}" \
-            "${{ secrets.HETZNER_SSH_KEY_NAME }}" \
-            > dev/.env
-
       - name: Install SSH key
         run: |
           mkdir -p ~/.ssh
@@ -87,6 +75,8 @@ jobs:
         run: ./dev/test-ssh-journal.sh --skip-build
         env:
           SERVER_NAME: hc-e2e-ssh-journal
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
 
   valgrind:
     runs-on: ubuntu-24.04
