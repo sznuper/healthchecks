@@ -56,6 +56,8 @@ jobs:
 
       - name: Run all healthchecks on VPS
         run: ./dev/test-on-vps.sh --skip-build
+        env:
+          SERVER_NAME: hc-e2e-all
 
   vps-ssh-journal:
     needs: build
@@ -83,6 +85,8 @@ jobs:
 
       - name: Run ssh_journal lifecycle test on VPS
         run: ./dev/test-ssh-journal.sh --skip-build
+        env:
+          SERVER_NAME: hc-e2e-ssh-journal
 
   valgrind:
     runs-on: ubuntu-24.04

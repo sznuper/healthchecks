@@ -14,7 +14,7 @@ source "$SCRIPT_DIR/.env"
 : "${HETZNER_API_TOKEN:?HETZNER_API_TOKEN must be set in .env}"
 : "${SSH_KEY:?SSH_KEY must be set in .env}"
 
-SERVER_NAME="hc-e2e-test"
+SERVER_NAME="${SERVER_NAME:-hc-e2e-test}"
 SERVER_TYPE="cx23"
 LOCATION="fsn1"
 IMAGE="debian-13"
