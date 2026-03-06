@@ -75,7 +75,7 @@ cleanup() {
         echo "  To delete: ./dev/delete-server.sh $SERVER_ID"
     fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # ── Generate SSH events ───────────────────────────────────────────────────────
 

@@ -76,7 +76,7 @@ cleanup() {
         echo "  To delete later: ./dev/delete-server.sh $SERVER_ID"
     fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # ── Run healthchecks ─────────────────────────────────────────────────────────
 
