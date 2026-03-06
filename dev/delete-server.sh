@@ -10,13 +10,8 @@ fi
 
 SERVER_ID="$1"
 
-if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
-    echo "Error: $SCRIPT_DIR/.env not found. Copy .env.example and fill in the values." >&2
-    exit 1
-fi
-
 # shellcheck source=.env
-source "$SCRIPT_DIR/.env"
+[[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
 
 : "${HETZNER_API_TOKEN:?HETZNER_API_TOKEN must be set in .env}"
 
