@@ -96,18 +96,6 @@ for BINARY in "$HC_DIR"/build/*; do
 
     EXIT_CODE=0
     case "$NAME" in
-        ssh_btmp)
-            # watch trigger: feed current /var/log/btmp contents
-            "$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$BINARY" \
-                -- "cat /var/log/btmp | /root/ssh_btmp" \
-                || EXIT_CODE=$?
-            ;;
-        ssh_wtmp)
-            # watch trigger: feed current /var/log/wtmp contents
-            "$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$BINARY" \
-                -- "cat /var/log/wtmp | /root/ssh_wtmp" \
-                || EXIT_CODE=$?
-            ;;
         ssh_journal)
             # pipe trigger: run journalctl on the server and feed output to binary
             "$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$BINARY" \
