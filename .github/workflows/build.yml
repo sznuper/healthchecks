@@ -11,6 +11,10 @@ on:
         description: 'Version tag (e.g. v1.2.3) — required if release=true'
         type: string
         default: ''
+      prerelease:
+        description: 'Mark the GitHub release as a pre-release'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -172,4 +176,5 @@ jobs:
           gh release create "${{ inputs.version }}" \
             --title "${{ inputs.version }}" \
             --generate-notes \
+            ${{ inputs.prerelease && '--prerelease' || '' }} \
             build/*
