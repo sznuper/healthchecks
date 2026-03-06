@@ -2,8 +2,7 @@
 
 The `dev/` scripts build all healthchecks and run them on a live Debian 13 VPS
 (Hetzner Cloud). This is the primary way to verify a binary behaves correctly before
-pushing — containers don't replicate real system state (`/proc`, `/var/log/wtmp`,
-journald, etc.).
+pushing — containers don't replicate real system state (`/proc`, journald, etc.).
 
 ## Setup
 
@@ -39,9 +38,6 @@ Each binary receives input matching its trigger type:
 | `cpu_usage`   | interval | none                                                               |
 | `disk_usage`  | interval | none                                                               |
 | `memory_usage`| interval | none                                                               |
-| `ssh_login`   | interval | none                                                               |
-| `ssh_btmp`    | watch    | `cat /var/log/btmp`                                                |
-| `ssh_wtmp`    | watch    | `cat /var/log/wtmp`                                                |
 | `ssh_journal` | pipe     | `journalctl -u ssh -u sshd --output=json --no-pager`               |
 
 ---
@@ -109,9 +105,6 @@ to the remote process.
 # Pipe trigger — pipe input from local machine
 echo '{"MESSAGE":"Invalid user admin from 1.2.3.4 port 55000","__REALTIME_TIMESTAMP":"1772717618000000"}' \
     | ./dev/run-binary.sh $SERVER_IP build/ssh_journal
-
-# Watch trigger — pipe file contents from the server via --
-./dev/run-binary.sh $SERVER_IP build/ssh_btmp -- "cat /var/log/btmp | /root/ssh_btmp"
 
 # With env var
 ./dev/run-binary.sh $SERVER_IP build/disk_usage -- "env HEALTHCHECK_ARG_RAW=1 /root/disk_usage"

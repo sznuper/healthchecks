@@ -73,9 +73,6 @@ src/
   cpu_usage.c       # interval trigger
   disk_usage.c      # interval trigger
   memory_usage.c    # interval trigger
-  ssh_login.c       # interval trigger — reads /var/log/wtmp + /var/log/btmp
-  ssh_btmp.c        # watch trigger  — /var/log/btmp bytes on stdin
-  ssh_wtmp.c        # watch trigger  — /var/log/wtmp bytes on stdin
   ssh_journal.c     # pipe trigger   — journalctl --output=json on stdin
 Makefile
 docs/
