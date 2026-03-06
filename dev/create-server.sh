@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${SSH_KEY:?SSH_KEY must be set in .env}"
 
 SERVER_NAME="${SERVER_NAME:-hc-e2e-test}"
-SERVER_TYPE="cx23"
+SERVER_TYPE="${SERVER_TYPE:-cx23}"
 LOCATION="fsn1"
 IMAGE="debian-13"
 
