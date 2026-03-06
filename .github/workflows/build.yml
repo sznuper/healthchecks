@@ -2,6 +2,15 @@ name: Build and Test
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create a GitHub release after successful tests'
+        type: boolean
+        default: false
+      version:
+        description: 'Version tag (e.g. v1.2.3) — required if release=true'
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -21,188 +30,59 @@ jobs:
           name: checks
           path: build/
 
-  test:
-    name: test (${{ matrix.name }})
-    runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container || '' }}
+  vps-all:
     needs: build
-    strategy:
-      matrix:
-        include:
-          - name: Ubuntu 24.04 x86_64
-            runner: ubuntu-24.04
-          - name: Ubuntu 22.04 x86_64
-            runner: ubuntu-22.04
-          - name: Ubuntu 24.04 aarch64
-            runner: ubuntu-24.04-arm
-          - name: Debian 13 x86_64
-            runner: ubuntu-24.04
-            container: debian:13
-          - name: Fedora 43 x86_64
-            runner: ubuntu-24.04
-            container: fedora:43
-          - name: Alpine 3.23 x86_64
-            runner: ubuntu-24.04
-            container: alpine:3.23
+    runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: checks
-          path: build/
+          path: healthchecks/build/
 
-      - name: Make binaries executable
-        run: chmod +x build/*
-
-      # --- disk_usage ---
-
-      - name: Test disk_usage defaults
+      - name: Write dev/.env
         run: |
-          output=$(sh ./build/disk_usage)
-          echo "$output"
-          echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
-          echo "$output" | grep -q "^mount=/$"
-          echo "$output" | grep -q "^usage_percent="
-          echo "$output" | grep -q "^total="
-          echo "$output" | grep -q "^used="
-          echo "$output" | grep -q "^available="
-          # advanced fields should NOT appear by default
-          ! echo "$output" | grep -q "^free="
-          ! echo "$output" | grep -q "^inodes="
+          printf 'HETZNER_API_TOKEN=%s\nSSH_KEY=%s\n' \
+            "${{ secrets.HETZNER_API_TOKEN }}" \
+            "${{ secrets.HETZNER_SSH_KEY_NAME }}" \
+            > healthchecks/dev/.env
 
-      - name: Test disk_usage with custom thresholds
+      - name: Install SSH key
         run: |
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=1 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=2 HEALTHCHECK_ARG_MOUNT=/ sh ./build/disk_usage)
-          echo "$output"
-          echo "$output" | grep -q "^status=critical$"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-      - name: Test disk_usage exit code on invalid mount
+      - name: Run all healthchecks on VPS
+        run: cd healthchecks && ./dev/test-on-vps.sh --skip-build
+
+  vps-ssh-journal:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: checks
+          path: healthchecks/build/
+
+      - name: Write dev/.env
         run: |
-          if sh ./build/disk_usage 2>/dev/null; then
-            echo "FAIL: expected non-zero exit for invalid mount"
-            exit 1
-          fi
-        env:
-          HEALTHCHECK_ARG_MOUNT: /nonexistent/mount/point
+          printf 'HETZNER_API_TOKEN=%s\nSSH_KEY=%s\n' \
+            "${{ secrets.HETZNER_API_TOKEN }}" \
+            "${{ secrets.HETZNER_SSH_KEY_NAME }}" \
+            > healthchecks/dev/.env
 
-      - name: Test disk_usage RAW mode
+      - name: Install SSH key
         run: |
-          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/disk_usage)
-          echo "$output"
-          # raw total should be a plain integer (no unit suffix)
-          echo "$output" | grep -q "^total=[0-9]*$"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-      - name: Test disk_usage RAW=false is off
-        run: |
-          output=$(HEALTHCHECK_ARG_RAW=false sh ./build/disk_usage)
-          echo "$output"
-          # should have a unit suffix, not a plain integer
-          echo "$output" | grep -q "^total=.*[A-Z]"
-
-      - name: Test disk_usage ADVANCED mode
-        run: |
-          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/disk_usage)
-          echo "$output"
-          echo "$output" | grep -q "^free="
-          echo "$output" | grep -q "^inodes="
-          echo "$output" | grep -q "^inodes_used="
-          echo "$output" | grep -q "^inodes_free="
-          echo "$output" | grep -q "^inodes_available="
-          echo "$output" | grep -q "^inodes_usage_percent="
-
-      # --- cpu_usage (requires /proc/stat — Linux only) ---
-
-      - name: Test cpu_usage defaults
-        run: |
-          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
-          echo "$output"
-          echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
-          echo "$output" | grep -q "^usage_percent="
-          echo "$output" | grep -q "^user_percent="
-          echo "$output" | grep -q "^system_percent="
-          echo "$output" | grep -q "^idle_percent="
-          echo "$output" | grep -q "^iowait_percent="
-          echo "$output" | grep -q "^cores="
-          # advanced fields should NOT appear by default
-          ! echo "$output" | grep -q "^nice_percent="
-          ! echo "$output" | grep -q "^procs_running="
-
-      - name: Test cpu_usage ADVANCED mode
-        run: |
-          output=$(HEALTHCHECK_ARG_SAMPLE_MS=100 HEALTHCHECK_ARG_ADVANCED=1 sh ./build/cpu_usage)
-          echo "$output"
-          echo "$output" | grep -q "^nice_percent="
-          echo "$output" | grep -q "^irq_percent="
-          echo "$output" | grep -q "^softirq_percent="
-          echo "$output" | grep -q "^steal_percent="
-          echo "$output" | grep -q "^guest_percent="
-          echo "$output" | grep -q "^guest_nice_percent="
-          echo "$output" | grep -q "^procs_running="
-          echo "$output" | grep -q "^procs_blocked="
-
-      - name: Test cpu_usage with low thresholds
-        run: |
-          # Generate CPU load so the sample always sees non-zero ticks
-          while :; do :; done &
-          LOAD_PID=$!
-          output=$(HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=0.1 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=0.2 HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
-          kill $LOAD_PID 2>/dev/null || true
-          echo "$output"
-          echo "$output" | grep -q "^status=critical$"
-
-      # --- memory_usage (requires /proc/meminfo — Linux only) ---
-
-      - name: Test memory_usage defaults
-        if: ${{ !matrix.container }}
-        run: |
-          output=$(sh ./build/memory_usage)
-          echo "$output"
-          echo "$output" | grep -q "^status=\(ok\|warning\|critical\)$"
-          echo "$output" | grep -q "^usage_percent="
-          echo "$output" | grep -q "^total="
-          echo "$output" | grep -q "^used="
-          echo "$output" | grep -q "^available="
-          echo "$output" | grep -q "^swap_total="
-          echo "$output" | grep -q "^swap_used="
-          echo "$output" | grep -q "^swap_usage_percent="
-          # advanced fields should NOT appear by default
-          ! echo "$output" | grep -q "^free="
-          ! echo "$output" | grep -q "^buffers="
-
-      - name: Test memory_usage RAW mode
-        if: ${{ !matrix.container }}
-        run: |
-          output=$(HEALTHCHECK_ARG_RAW=1 sh ./build/memory_usage)
-          echo "$output"
-          echo "$output" | grep -q "^total=[0-9]*$"
-
-      - name: Test memory_usage ADVANCED mode
-        if: ${{ !matrix.container }}
-        run: |
-          output=$(HEALTHCHECK_ARG_ADVANCED=1 sh ./build/memory_usage)
-          echo "$output"
-          echo "$output" | grep -q "^free="
-          echo "$output" | grep -q "^buffers="
-          echo "$output" | grep -q "^cached="
-          echo "$output" | grep -q "^swap_free="
-          echo "$output" | grep -q "^shared="
-          echo "$output" | grep -q "^slab="
-          # pass-through fields from /proc/meminfo
-          echo "$output" | grep -q "^active="
-
-      # --- no old key names ---
-
-      - name: Verify no legacy key names
-        if: ${{ !matrix.container }}
-        run: |
-          disk_out=$(sh ./build/disk_usage)
-          cpu_out=$(HEALTHCHECK_ARG_SAMPLE_MS=100 sh ./build/cpu_usage)
-          mem_out=$(sh ./build/memory_usage)
-          # bare "usage=" without _percent suffix should not appear
-          ! echo "$disk_out" | grep -q "^usage=[0-9]"
-          ! echo "$cpu_out" | grep -q "^usage=[0-9]"
-          ! echo "$mem_out" | grep -q "^usage=[0-9]"
-          ! echo "$disk_out" | grep -q "^inodes_usage=[0-9]"
-          ! echo "$mem_out" | grep -q "^swap_usage=[0-9]"
+      - name: Run ssh_journal lifecycle test on VPS
+        run: cd healthchecks && ./dev/test-ssh-journal.sh --skip-build
 
   valgrind:
     runs-on: ubuntu-24.04
@@ -274,3 +154,28 @@ jobs:
             read rss user sys major minor < "/tmp/${name}.time"
             echo "| ${name} | ${rss} KB | ${user}s | ${sys}s | ${major} major / ${minor} minor |" >> "$GITHUB_STEP_SUMMARY"
           done
+
+  release:
+    needs: [vps-all, vps-ssh-journal, valgrind, benchmark]
+    if: inputs.release == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: checks
+          path: build/
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag "${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"
+          gh release create "${{ inputs.version }}" \
+            --title "${{ inputs.version }}" \
+            --generate-notes \
+            build/*
