@@ -30,8 +30,15 @@ SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLeve
 BINARY_NAME="$(basename "$LOCAL_BINARY")"
 REMOTE_PATH="/root/$BINARY_NAME"
 
+# Wrap IPv6 addresses in brackets for SCP/SSH
+if [[ "$SERVER_IP" == *:* ]]; then
+    SSH_HOST="[$SERVER_IP]"
+else
+    SSH_HOST="$SERVER_IP"
+fi
+
 # Copy binary to server
-scp -q -O "${SSH_OPTS[@]}" "$LOCAL_BINARY" "root@$SERVER_IP:$REMOTE_PATH"
+scp -q -O "${SSH_OPTS[@]}" "$LOCAL_BINARY" "root@$SSH_HOST:$REMOTE_PATH"
 
 # Build remote command: chmod+x the binary, then execute
 if [[ ${#REMOTE_ARGS[@]} -gt 0 ]]; then
@@ -40,4 +47,4 @@ else
     REMOTE_CMD="$REMOTE_PATH"
 fi
 
-exec ssh "${SSH_OPTS[@]}" "root@$SERVER_IP" "chmod +x $REMOTE_PATH && $REMOTE_CMD"
+exec ssh "${SSH_OPTS[@]}" "root@$SSH_HOST" "chmod +x $REMOTE_PATH && $REMOTE_CMD"

@@ -63,6 +63,7 @@ jobs:
         env:
           SERVER_NAME: hc-e2e-all-${{ matrix.arch }}
           SERVER_TYPE: ${{ matrix.server_type }}
+          ENABLE_IPV4: 'false'
           HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
           SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
 
@@ -111,6 +112,7 @@ jobs:
         env:
           SERVER_NAME: hc-e2e-ssh-journal-${{ matrix.arch }}
           SERVER_TYPE: ${{ matrix.server_type }}
+          ENABLE_IPV4: 'false'
           HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
           SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
 

@@ -82,14 +82,21 @@ source <("$SCRIPT_DIR/create-server.sh")
 : "${SERVER_ID:?create-server.sh did not set SERVER_ID}"
 : "${SERVER_IP:?create-server.sh did not set SERVER_IP}"
 
+# Wrap IPv6 addresses in brackets for SSH
+if [[ "$SERVER_IP" == *:* ]]; then
+    SSH_HOST="[$SERVER_IP]"
+else
+    SSH_HOST="$SERVER_IP"
+fi
+
 # ── Generate SSH events ───────────────────────────────────────────────────────
 
 section "Generating failed login attempts"
 # Non-existent users → sshd logs "Invalid user X from IP"
 for USER in admin ubuntu test operator deploy; do
-    echo "  trying $USER@$SERVER_IP..."
+    echo "  trying $USER@$SSH_HOST..."
     ssh "${SSH_OPTS[@]}" -o BatchMode=yes -o ConnectTimeout=5 \
-        "$USER@$SERVER_IP" true 2>/dev/null || true
+        "$USER@$SSH_HOST" true 2>/dev/null || true
     sleep 0.5
 done
 
@@ -97,7 +104,7 @@ section "Generating successful logins and logouts"
 # Accepted publickey for root → sshd logs "Accepted publickey for root from IP"
 for i in 1 2 3; do
     echo "  login $i..."
-    ssh "${SSH_OPTS[@]}" "root@$SERVER_IP" "echo session $i"
+    ssh "${SSH_OPTS[@]}" "root@$SSH_HOST" "echo session $i"
     sleep 0.5
 done
 

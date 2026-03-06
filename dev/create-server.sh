@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SERVER_NAME="${SERVER_NAME:-hc-e2e-test}"
 SERVER_TYPE="${SERVER_TYPE:-cx23}"
+ENABLE_IPV4="${ENABLE_IPV4:-true}"
 LOCATION="fsn1"
 IMAGE="debian-13"
 
@@ -18,14 +19,10 @@ log() { echo "$*" >&2; }
 
 # Delete any existing server with the same name
 log "Checking for existing server '$SERVER_NAME'..."
-EXISTING=$(curl -s \
+EXISTING_ID=$(curl -s \
     -H "Authorization: Bearer $HETZNER_API_TOKEN" \
-    "https://api.hetzner.cloud/v1/servers?name=$SERVER_NAME")
-EXISTING_ID=$(echo "$EXISTING" | python3 -c "
-import sys, json
-servers = json.load(sys.stdin).get('servers', [])
-print(servers[0]['id'] if servers else '')
-" 2>/dev/null || true)
+    "https://api.hetzner.cloud/v1/servers?name=$SERVER_NAME" | \
+    jq -r '.servers[0].id // ""')
 
 if [[ -n "$EXISTING_ID" ]]; then
     log "Deleting existing server $EXISTING_ID..."
@@ -40,15 +37,15 @@ log "Creating server '$SERVER_NAME'..."
 RESPONSE=$(curl -s -X POST \
     -H "Authorization: Bearer $HETZNER_API_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"$SERVER_NAME\",\"server_type\":\"$SERVER_TYPE\",\"location\":\"$LOCATION\",\"image\":\"$IMAGE\",\"ssh_keys\":[\"$SSH_KEY\"]}" \
+    -d "{\"name\":\"$SERVER_NAME\",\"server_type\":\"$SERVER_TYPE\",\"location\":\"$LOCATION\",\"image\":\"$IMAGE\",\"ssh_keys\":[\"$SSH_KEY\"],\"public_net\":{\"enable_ipv4\":$ENABLE_IPV4}}" \
     "https://api.hetzner.cloud/v1/servers")
 
-read -r SERVER_ID SERVER_IP < <(echo "$RESPONSE" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-s = d.get('server', {})
-print(s.get('id', ''), s.get('public_net', {}).get('ipv4', {}).get('ip', ''))
-")
+SERVER_ID=$(echo "$RESPONSE" | jq -r '.server.id // ""')
+if [[ "$ENABLE_IPV4" == "true" ]]; then
+    SERVER_IP=$(echo "$RESPONSE" | jq -r '.server.public_net.ipv4.ip // ""')
+else
+    SERVER_IP=$(echo "$RESPONSE" | jq -r '.server.public_net.ipv6.ip // "" | split("/")[0] + "1"')
+fi
 
 if [[ -z "$SERVER_ID" || -z "$SERVER_IP" ]]; then
     log "Error: failed to parse server creation response:"
@@ -63,10 +60,8 @@ log "Waiting for server to reach running state..."
 for i in $(seq 1 60); do
     STATUS=$(curl -s \
         -H "Authorization: Bearer $HETZNER_API_TOKEN" \
-        "https://api.hetzner.cloud/v1/servers/$SERVER_ID" | python3 -c "
-import sys, json
-print(json.load(sys.stdin).get('server', {}).get('status', ''))
-" 2>/dev/null || true)
+        "https://api.hetzner.cloud/v1/servers/$SERVER_ID" | \
+        jq -r '.server.status // ""')
     if [[ "$STATUS" == "running" ]]; then
         log "Server is running."
         break
