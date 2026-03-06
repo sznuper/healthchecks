@@ -21,11 +21,7 @@ log "Checking for existing server '$SERVER_NAME'..."
 EXISTING=$(curl -s \
     -H "Authorization: Bearer $HETZNER_API_TOKEN" \
     "https://api.hetzner.cloud/v1/servers?name=$SERVER_NAME")
-EXISTING_ID=$(echo "$EXISTING" | python3 -c "
-import sys, json
-servers = json.load(sys.stdin).get('servers', [])
-print(servers[0]['id'] if servers else '')
-" 2>/dev/null || true)
+EXISTING_ID=$(echo "$EXISTING" | jq -r '.servers[0].id // ""')
 
 if [[ -n "$EXISTING_ID" ]]; then
     log "Deleting existing server $EXISTING_ID..."
@@ -43,12 +39,8 @@ RESPONSE=$(curl -s -X POST \
     -d "{\"name\":\"$SERVER_NAME\",\"server_type\":\"$SERVER_TYPE\",\"location\":\"$LOCATION\",\"image\":\"$IMAGE\",\"ssh_keys\":[\"$SSH_KEY\"]}" \
     "https://api.hetzner.cloud/v1/servers")
 
-read -r SERVER_ID SERVER_IP < <(echo "$RESPONSE" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-s = d.get('server', {})
-print(s.get('id', ''), s.get('public_net', {}).get('ipv4', {}).get('ip', ''))
-")
+SERVER_ID=$(echo "$RESPONSE" | jq -r '.server.id // ""')
+SERVER_IP=$(echo "$RESPONSE" | jq -r '.server.public_net.ipv4.ip // ""')
 
 if [[ -z "$SERVER_ID" || -z "$SERVER_IP" ]]; then
     log "Error: failed to parse server creation response:"
@@ -63,10 +55,7 @@ log "Waiting for server to reach running state..."
 for i in $(seq 1 60); do
     STATUS=$(curl -s \
         -H "Authorization: Bearer $HETZNER_API_TOKEN" \
-        "https://api.hetzner.cloud/v1/servers/$SERVER_ID" | python3 -c "
-import sys, json
-print(json.load(sys.stdin).get('server', {}).get('status', ''))
-" 2>/dev/null || true)
+        "https://api.hetzner.cloud/v1/servers/$SERVER_ID" | jq -r '.server.status // ""')
     if [[ "$STATUS" == "running" ]]; then
         log "Server is running."
         break
