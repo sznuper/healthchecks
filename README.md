@@ -12,7 +12,6 @@ Each healthcheck is a standalone C binary compiled with [Cosmopolitan Libc](http
 | `cpu_usage` | CPU utilization over a sampling interval |
 | `memory_usage` | Memory and swap usage |
 | `ssh_journal` | Detects SSH login events from journald (pipe trigger) |
-| `systemd_unit` | Checks if a systemd unit is active |
 
 ## Healthcheck interface
 

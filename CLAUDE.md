@@ -1,6 +1,6 @@
 # Sznuper Healthchecks
 
-Official portable healthchecks for [Sznuper](https://github.com/sznuper/sznuper), a monitoring daemon for Linux servers.
+Official portable healthchecks for [Sznuper](https://github.com/sznuper/sznuper), a lightweight server monitor that runs healthchecks and sends notifications.
 
 ## What this repo is
 
