@@ -7,7 +7,7 @@
  *   - name: ssh_failures
  *     healthcheck: file://ssh_journal
  *     trigger:
- *       pipe: "journalctl -f -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
+ *       pipe: "journalctl -f --since=now -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
  *     args:
  *       alert_on: failure
  *       threshold_warn_count: 1
