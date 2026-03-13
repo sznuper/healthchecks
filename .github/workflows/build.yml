@@ -7,10 +7,14 @@ on:
         description: 'Create a GitHub release after successful tests'
         type: boolean
         default: false
-      version:
-        description: 'Version tag (e.g. v1.2.3) — required if release=true'
-        type: string
-        default: ''
+      bump:
+        description: 'Version bump (only used if release=true)'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: minor
       prerelease:
         description: 'Mark the GitHub release as a pre-release'
         type: boolean
@@ -215,14 +219,29 @@ jobs:
           name: checks
           path: build/
 
+      - name: Determine version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "v0.0.0")
+          latest="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$latest"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          echo "tag=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
       - name: Create tag and release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git tag "${{ inputs.version }}"
-          git push origin "${{ inputs.version }}"
-          gh release create "${{ inputs.version }}" \
-            --title "${{ inputs.version }}" \
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "${{ steps.version.outputs.tag }}" \
             --generate-notes \
             ${{ inputs.prerelease && '--prerelease' || '' }} \
             build/*
