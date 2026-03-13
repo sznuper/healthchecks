@@ -15,8 +15,8 @@ on:
           - minor
           - major
         default: minor
-      prerelease:
-        description: 'Mark the GitHub release as a pre-release'
+      latest:
+        description: 'Set as latest release'
         type: boolean
         default: false
 
@@ -243,5 +243,5 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" \
             --title "${{ steps.version.outputs.tag }}" \
             --generate-notes \
-            ${{ inputs.prerelease && '--prerelease' || '' }} \
+            ${{ inputs.latest != true && '--prerelease' || '' }} \
             build/*
