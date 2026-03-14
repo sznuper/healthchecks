@@ -17,22 +17,24 @@ Each healthcheck is a standalone C binary compiled with [Cosmopolitan Libc](http
 
 Every healthcheck follows the same contract:
 
-- **Input:** environment variables (`HEALTHCHECK_ARG_*` for user-defined args, `HEALTHCHECK_TRIGGER` for trigger metadata) and optionally stdin (for watch triggers).
-- **Output:** `key=value` pairs on stdout, one per line. The `status` key is required and must be `ok`, `warning`, or `critical`.
+- **Input:** environment variables (`HEALTHCHECK_ARG_*` for user-defined args, `HEALTHCHECK_TRIGGER` for trigger metadata) and optionally stdin (for pipe/watch triggers).
+- **Output:** events on stdout using `--- event` delimiter, followed by `key=value` pairs. The `type` field is required in every event.
 
 Example output from `disk_usage`:
 
 ```
-status=warning
-usage=84
+--- event
+type=high_usage
+mount=/
+usage_percent=84.3
 available=8G
 ```
 
-Each healthcheck documents its arguments, outputs, and status logic in a header comment.
+Each healthcheck documents its arguments, outputs, and event type logic in a header comment.
 
 ## Writing your own healthchecks
 
-A healthcheck can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `HEALTHCHECK_ARG_*` environment variables and print `key=value` pairs to stdout.
+A healthcheck can be any executable — Go, Rust, Python, Bash, anything. It just needs to read its config from `HEALTHCHECK_ARG_*` environment variables and print `--- event` blocks with `type=` and `key=value` fields to stdout.
 
 For healthchecks you want to distribute, Cosmopolitan C is recommended for the same reason the official healthchecks use it: one binary, every architecture, no dependencies.
 

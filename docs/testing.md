@@ -60,10 +60,9 @@ Lifecycle:
    sshd logs `Invalid user X from IP` in journald
 2. SSH as `root` three times → sshd logs `Accepted publickey for root from IP`
 3. Waits 3 seconds for journald to flush
-4. Runs `ssh_journal` with `HEALTHCHECK_ARG_ALERT_ON=both` against `journalctl
-   --no-pager` output
+4. Runs `ssh_journal` against `journalctl --no-pager` output
 
-Expected output: 5 failure records + login records, all `status=warning`.
+Expected output: 5 `type=failure` events + `type=login` events, each as a `--- event` block.
 
 ---
 
