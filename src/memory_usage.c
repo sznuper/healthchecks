@@ -12,8 +12,9 @@
  *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields plus generic pass-through of /proc/meminfo
  *
- * Output (basic):
- *   status            - ok, warning, or critical
+ * Output:
+ *   --- event
+ *   type              - ok, high_usage, or critical_usage
  *   usage_percent     - Memory usage percentage as float (0-100)
  *   total             - MemTotal (human-readable, or raw bytes if RAW set)
  *   used              - MemTotal - MemAvailable (human-readable, or raw bytes)
@@ -31,10 +32,10 @@
  *   slab              - Slab (human-readable, or raw bytes)
  *   (plus all remaining /proc/meminfo fields as lowercase keys)
  *
- * Status logic:
- *   usage >= threshold_crit_percent -> critical
- *   usage >= threshold_warn_percent -> warning
- *   otherwise               -> ok
+ * Event type logic:
+ *   usage >= threshold_crit_percent -> critical_usage
+ *   usage >= threshold_warn_percent -> high_usage
+ *   otherwise                       -> ok
  */
 
 #include <ctype.h>
@@ -141,15 +142,16 @@ int main() {
     unsigned long long swap_used = (swap_total >= swap_free) ? swap_total - swap_free : 0;
     double swap_usage_pct = (swap_total > 0) ? (double)swap_used / (double)swap_total * 100.0 : 0.0;
 
-    const char *status;
+    const char *type;
     if (usage_pct >= thresh_crit)
-        status = "critical";
+        type = "critical_usage";
     else if (usage_pct >= thresh_warn)
-        status = "warning";
+        type = "high_usage";
     else
-        status = "ok";
+        type = "ok";
 
-    printf("status=%s\n", status);
+    printf("--- event\n");
+    printf("type=%s\n", type);
     printf("usage_percent=%.1f\n", usage_pct);
     emit_bytes("total", mem_total * 1024, raw);
     emit_bytes("used", used_kb * 1024, raw);

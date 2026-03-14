@@ -4,27 +4,23 @@
  * Reads stdin line by line (journalctl -f --output=json output). Parses SSH
  * failure and login events in real time. Designed for the pipe trigger:
  *
- *   - name: ssh_failures
+ *   - name: ssh_journal
  *     healthcheck: file://ssh_journal
  *     trigger:
  *       pipe: "journalctl -f --since=now -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
- *     args:
- *       alert_on: failure
- *       threshold_warn_count: 1
- *       threshold_crit_count: 20
- *     template: |
- *       SSH {{ healthcheck.event }}: {{ healthcheck.user }} from {{ healthcheck.host }} at {{ healthcheck.timestamp }}
+ *     template: "SSH {{event.type}} from {{event.host}} as {{event.user}}"
+ *     cooldown: 5m
  *     notify:
  *       - telegram
+ *     events:
+ *       on_unmatched: drop
+ *       override:
+ *         failure:
+ *           cooldown: 1m
+ *         login: {}
  *
  * Args (via environment):
- *   HEALTHCHECK_ARG_ALERT_ON              - Which events trigger non-ok status:
- *                                           "failure" (default): warn/critical on failures
- *                                           "login":  warning on accepted logins
- *                                           "both":   either condition triggers non-ok
- *   HEALTHCHECK_ARG_THRESHOLD_WARN_COUNT  - Failure count for warning  (default: 1)
- *   HEALTHCHECK_ARG_THRESHOLD_CRIT_COUNT  - Failure count for critical (default: 20)
- *   HEALTHCHECK_ARG_ADVANCED              - When set, emit all extra JSON fields per record
+ *   HEALTHCHECK_ARG_ADVANCED - When set, emit all extra JSON fields per event
  *
  * Input format: JSON lines from journalctl --output=json.
  * Required fields per line: MESSAGE, __REALTIME_TIMESTAMP.
@@ -39,38 +35,16 @@
  * Note: "Connection closed by invalid user" is always paired with "Invalid user"
  * — it is skipped to avoid double-counting.
  *
- * Output (events matched):
- *   status=warning|critical
- *   event_count=N
- *   failure_count=N
- *   login_count=N
- *   --- records
- *   status=warning|critical   (per record)
- *   event=failure|login
+ * Output (per matched event):
+ *   --- event
+ *   type=failure|login
  *   user=USER
  *   host=HOST
  *   timestamp=YYYY-MM-DDTHH:MM:SSZ
  *   [extra fields if advanced=1]
  *
  * Output (no matches):
- *   status=ok
- *   event_count=0
- *   failure_count=0
- *   login_count=0
- *
- * Status logic (alert_on=failure):
- *   failure_count >= threshold_crit_count -> critical
- *   failure_count >= threshold_warn_count -> warning
- *   otherwise                             -> ok
- *
- * Status logic (alert_on=login):
- *   login_count > 0                       -> warning
- *   otherwise                             -> ok
- *
- * Status logic (alert_on=both):
- *   failure_count >= threshold_crit_count -> critical
- *   failure_count >= threshold_warn_count OR login_count > 0 -> warning
- *   otherwise                             -> ok
+ *   (empty — zero events)
  */
 
 #include "sznuper.h"
@@ -91,27 +65,6 @@ struct event {
     char timestamp[32];      /* "2026-03-05T13:55:05Z" */
     char raw_json[MAX_LINE]; /* full JSON line, stored only when advanced=1 */
 };
-
-/* Dynamic string set (deduplication for output arrays) */
-#define MAX_UNIQUE 256
-
-struct strset {
-    char items[MAX_UNIQUE][MAX_STR];
-    int  count;
-};
-
-static int strset_add(struct strset *s, const char *str) {
-    for (int i = 0; i < s->count; i++) {
-        if (strcmp(s->items[i], str) == 0)
-            return 0; /* already present */
-    }
-    if (s->count >= MAX_UNIQUE)
-        return 0;
-    strncpy(s->items[s->count], str, MAX_STR - 1);
-    s->items[s->count][MAX_STR - 1] = '\0';
-    s->count++;
-    return 1;
-}
 
 /*
  * Extract a JSON string value for the given key from a compact JSON object line.
@@ -365,25 +318,11 @@ static int parse_message(const char *line, struct event *ev) {
 }
 
 int main(void) {
-    const char *alert_on  = parse_string("HEALTHCHECK_ARG_ALERT_ON", "failure");
-    long thresh_warn      = parse_int("HEALTHCHECK_ARG_THRESHOLD_WARN_COUNT", 1);
-    long thresh_crit      = parse_int("HEALTHCHECK_ARG_THRESHOLD_CRIT_COUNT", 20);
-    int  advanced         = parse_bool("HEALTHCHECK_ARG_ADVANCED");
-
-    int do_alert_failure = (strcmp(alert_on, "failure") == 0 ||
-                            strcmp(alert_on, "both")    == 0);
-    int do_alert_login   = (strcmp(alert_on, "login")   == 0 ||
-                            strcmp(alert_on, "both")    == 0);
+    int advanced = parse_bool("HEALTHCHECK_ARG_ADVANCED");
 
     static struct event events[MAX_EVENTS];
-    int  event_count   = 0;
-    long failure_count = 0;
-    long login_count   = 0;
-    int  validated     = 0; /* set after first JSON line passes field validation */
-
-    struct strset event_types = {0};
-    struct strset users       = {0};
-    struct strset hosts       = {0};
+    int event_count = 0;
+    int validated   = 0; /* set after first JSON line passes field validation */
 
     char line[MAX_LINE];
     while (fgets(line, sizeof(line), stdin)) {
@@ -430,49 +369,19 @@ int main(void) {
             ev.raw_json[MAX_LINE - 1] = '\0';
         }
 
-        if (ev.type == EV_FAILURE)
-            failure_count++;
-        else
-            login_count++;
-
-        strset_add(&event_types, ev.type == EV_FAILURE ? "failure" : "login");
-        strset_add(&users, ev.user);
-        strset_add(&hosts, ev.host);
-
         if (event_count < MAX_EVENTS)
             events[event_count++] = ev;
     }
 
-    if (event_count == 0) {
-        printf("status=ok\n");
-        printf("event_count=0\n");
-        printf("failure_count=0\n");
-        printf("login_count=0\n");
+    /* Empty output = zero events (valid in v2 protocol) */
+    if (event_count == 0)
         return 0;
-    }
-
-    const char *failure_status = "ok";
-    if (do_alert_failure) {
-        if (failure_count >= thresh_crit)
-            failure_status = "critical";
-        else if (failure_count >= thresh_warn)
-            failure_status = "warning";
-    }
-    const char *login_status = do_alert_login ? "warning" : "ok";
-
-    printf("event_count=%d\n", event_count);
-    printf("failure_count=%ld\n", failure_count);
-    printf("login_count=%ld\n", login_count);
 
     const char *skip_keys[] = {"MESSAGE", "__REALTIME_TIMESTAMP"};
 
-    printf("--- records\n");
     for (int i = 0; i < event_count; i++) {
-        if (i > 0)
-            printf("--- record\n");
-        const char *rec_status = events[i].type == EV_FAILURE ? failure_status : login_status;
-        printf("status=%s\n", rec_status);
-        printf("event=%s\n", events[i].type == EV_FAILURE ? "failure" : "login");
+        printf("--- event\n");
+        printf("type=%s\n", events[i].type == EV_FAILURE ? "failure" : "login");
         printf("user=%s\n", events[i].user);
         printf("host=%s\n", events[i].host);
         printf("timestamp=%s\n", events[i].timestamp);

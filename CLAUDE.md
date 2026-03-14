@@ -16,54 +16,40 @@ Every healthcheck follows this protocol:
 - Stdin: new bytes from watched file (watch triggers), stdout of pipe command (pipe triggers), or empty (interval/cron).
 
 **Output:**
-- `key=value` pairs on stdout, one per line, lowercase keys.
-- `status` key is **required** in every record: must be `ok`, `warning`, or `critical`.
+- Events on stdout using `--- event` delimiter, `key=value` pairs per event, lowercase keys.
+- `type` key is **required** in every event: names the event type (e.g., `ok`, `high_usage`, `failure`, `login`).
 - Split on first `=` only. Lines without `=` are ignored.
+- Empty output (no `--- event` markers) is valid — zero events.
 
-**Single-record output** (interval/cron/watch healthchecks):
+**Single-event output** (interval/cron healthchecks):
 ```
-status=warning
+--- event
+type=high_usage
 usage_percent=84.3
 available=8G
 ```
 
-**Multi-record output** (pipe healthchecks that process a batch of events):
-
-Two structural tokens control the format, matched as exact trimmed lines:
-
-| Token          | Meaning                                              |
-|----------------|------------------------------------------------------|
-| `--- records`  | Ends the global props section; starts the records array |
-| `--- record`   | Starts the next record within the array              |
-
+**Multi-event output** (pipe healthchecks that process a batch of events):
 ```
-event_count=3
-failure_count=2
-login_count=1
---- records
-status=warning
-event=failure
+--- event
+type=failure
 user=admin
 host=1.2.3.4
 timestamp=2026-03-05T13:55:05Z
---- record
-status=warning
-event=failure
+--- event
+type=failure
 user=test
 host=1.2.3.4
 timestamp=2026-03-05T13:55:06Z
---- record
-status=ok
-event=login
+--- event
+type=login
 user=root
 host=83.22.197.254
 timestamp=2026-03-05T13:55:07Z
 ```
 
-Everything before `--- records` is the **global section** — batch-level context (counts,
-summaries). It is not itself a notification; its fields are merged into every record's
-template data. Each block after `--- records` / `--- record` is an independent record
-processed through its own status check, cooldown, and template render.
+Each `--- event` block is an independent event processed through its own config
+resolution, cooldown, and template render.
 
 ## Project structure
 
@@ -102,14 +88,14 @@ Each healthcheck compiles to a single portable binary with no libc dependency.
 
 1. Use direct syscalls or Cosmopolitan's libc — no shelling out to `df`, `awk`, `bc`, etc.
 2. Read args from `getenv("HEALTHCHECK_ARG_<KEY>")`.
-3. Print `key=value` pairs to stdout. Always print `status=ok|warning|critical`.
-4. Exit 0 on success. Non-zero exit with no `status` output = broken healthcheck (daemon logs error, never notifies).
+3. Print `--- event` delimiter followed by `key=value` pairs to stdout. Always include `type=<event_type>`.
+4. Exit 0 on success. Non-zero exit = broken healthcheck (daemon logs error, never notifies).
 5. Keep it minimal — one healthcheck, one concern, one file.
 
 ## Conventions
 
 - One `.c` file per healthcheck, no shared libraries. Common utilities live in `sznuper.h` (header-only, `static inline`).
-- Use `printf("key=value\n")` for output — no JSON, no fancy formatting.
+- Use `printf("--- event\n")` as delimiter, then `printf("key=value\n")` for fields — no JSON, no fancy formatting.
 - Document args, outputs, and status logic in a comment block at the top of each file.
 - Threshold args should be floats in 0-100 range for percentages.
 - Percentage output keys use the `_percent` suffix as floats in 0-100 range (e.g., `usage_percent=84.3`, `swap_usage_percent=12.0`).
@@ -130,7 +116,7 @@ Run a healthcheck manually by setting its env vars:
 HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT=80 HEALTHCHECK_ARG_THRESHOLD_CRIT_PERCENT=95 HEALTHCHECK_ARG_MOUNT=/ ./build/disk_usage
 ```
 
-Verify output is valid `key=value` lines with a `status` key. For testing on a real
+Verify output starts with `--- event` and includes a `type` key. For testing on a real
 server see `docs/testing.md`.
 
 ## Do not

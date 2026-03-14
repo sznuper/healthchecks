@@ -10,8 +10,9 @@
  *   HEALTHCHECK_ARG_SAMPLE_MS      - Sample delay in milliseconds (default: 250)
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (nice, irq, softirq, steal, guest, procs)
  *
- * Output (basic):
- *   status          - ok, warning, or critical
+ * Output:
+ *   --- event
+ *   type            - ok, high_usage, or critical_usage
  *   usage_percent   - Total CPU usage percentage as float (0-100)
  *   user_percent    - User CPU percentage as float (0-100)
  *   system_percent  - System CPU percentage as float (0-100)
@@ -29,10 +30,10 @@
  *   procs_running      - Number of currently running processes
  *   procs_blocked      - Number of processes blocked on I/O
  *
- * Status logic:
- *   usage >= threshold_crit_percent -> critical
- *   usage >= threshold_warn_percent -> warning
- *   otherwise               -> ok
+ * Event type logic:
+ *   usage >= threshold_crit_percent -> critical_usage
+ *   usage >= threshold_warn_percent -> high_usage
+ *   otherwise                       -> ok
  */
 
 #include <time.h>
@@ -146,7 +147,8 @@ int main() {
         d_user_real + d_nice_real + d_system + d_idle + d_iowait + d_irq + d_softirq + d_steal;
 
     if (total == 0) {
-        printf("status=ok\n");
+        printf("--- event\n");
+        printf("type=ok\n");
         printf("usage_percent=0.0\n");
         printf("user_percent=0.0\n");
         printf("system_percent=0.0\n");
@@ -179,15 +181,16 @@ int main() {
     double guest_pct = (double)d_guest / (double)total * 100.0;
     double guest_nice_pct = (double)d_guest_nice / (double)total * 100.0;
 
-    const char *status;
+    const char *type;
     if (usage_pct >= thresh_crit)
-        status = "critical";
+        type = "critical_usage";
     else if (usage_pct >= thresh_warn)
-        status = "warning";
+        type = "high_usage";
     else
-        status = "ok";
+        type = "ok";
 
-    printf("status=%s\n", status);
+    printf("--- event\n");
+    printf("type=%s\n", type);
     printf("usage_percent=%.1f\n", usage_pct);
     printf("user_percent=%.1f\n", user_pct);
     printf("system_percent=%.1f\n", system_pct);

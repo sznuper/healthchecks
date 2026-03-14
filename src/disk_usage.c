@@ -8,8 +8,9 @@
  *   HEALTHCHECK_ARG_RAW            - If set, emit byte values as raw integers instead of human-readable
  *   HEALTHCHECK_ARG_ADVANCED       - If set, emit all fields (free, inode stats)
  *
- * Output (basic):
- *   status           - ok, warning, or critical
+ * Output:
+ *   --- event
+ *   type             - ok, high_usage, or critical_usage
  *   mount            - The mount point checked
  *   usage_percent    - Usage percentage as float (0-100)
  *   total            - Total disk space (human-readable, or raw bytes if RAW set)
@@ -27,10 +28,10 @@
  * Note: Filesystems like btrfs do not expose inode counts via statvfs.
  * On these filesystems all inode fields will be 0 — this is expected.
  *
- * Status logic:
- *   usage >= threshold_crit_percent -> critical
- *   usage >= threshold_warn_percent -> warning
- *   otherwise               -> ok
+ * Event type logic:
+ *   usage >= threshold_crit_percent -> critical_usage
+ *   usage >= threshold_warn_percent -> high_usage
+ *   otherwise                       -> ok
  */
 
 #include <errno.h>
@@ -71,15 +72,16 @@ int main() {
     double inode_usage_pct =
         (inodes_nonroot > 0) ? (double)inodes_used / (double)inodes_nonroot * 100.0 : 0.0;
 
-    const char *status;
+    const char *type;
     if (usage_pct >= thresh_crit)
-        status = "critical";
+        type = "critical_usage";
     else if (usage_pct >= thresh_warn)
-        status = "warning";
+        type = "high_usage";
     else
-        status = "ok";
+        type = "ok";
 
-    printf("status=%s\n", status);
+    printf("--- event\n");
+    printf("type=%s\n", type);
     printf("mount=%s\n", mount);
     printf("usage_percent=%.1f\n", usage_pct);
     emit_bytes("total", total, raw);
