@@ -24,7 +24,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: shipurjan/setup-cosmopolitan@1f92831f1e4197d9ed52449de0f9d1efc2bdf04e
         with:
@@ -33,7 +33,7 @@ jobs:
       - name: Build healthchecks
         run: make
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: checks
           path: build/
@@ -49,9 +49,9 @@ jobs:
           - arch: aarch64
             server_type: cax11
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: checks
           path: build/
@@ -97,9 +97,9 @@ jobs:
           - arch: aarch64
             server_type: cax11
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: checks
           path: build/
@@ -137,7 +137,7 @@ jobs:
   valgrind:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind
@@ -165,7 +165,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: checks
           path: build/
@@ -212,9 +212,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: checks
           path: build/
