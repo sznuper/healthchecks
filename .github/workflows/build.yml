@@ -73,6 +73,8 @@ jobs:
     needs: [e2e, benchmark]
     if: inputs.release == true
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     permissions:
       contents: write
     steps:
@@ -109,3 +111,65 @@ jobs:
             --generate-notes \
             ${{ inputs.latest != true && '--prerelease' || '' }} \
             build/*
+
+  update-sznuper:
+    needs: release
+    if: inputs.release == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: checks
+          path: build/
+
+      - uses: actions/checkout@v6
+        with:
+          repository: sznuper/sznuper
+          token: ${{ secrets.SZNUPER_PAT }}
+          path: sznuper
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Update healthcheck versions
+        run: |
+          TAG="${{ needs.release.outputs.tag }}"
+          cd sznuper/internal/initcmd/defaults
+          for file in base.yml systemd.yml; do
+            count=$(yq '.alerts | length' "$file")
+            for i in $(seq 0 $((count - 1))); do
+              hc=$(yq ".alerts[$i].healthcheck" "$file")
+              if [[ "$hc" == *"healthchecks/releases/download/"* ]]; then
+                binary=$(basename "$hc")
+                sha=$(sha256sum "$GITHUB_WORKSPACE/build/$binary" | cut -d' ' -f1)
+                yq -i "
+                  .alerts[$i].healthcheck = \"https://github.com/sznuper/healthchecks/releases/download/$TAG/$binary\" |
+                  .alerts[$i].sha256 = \"$sha\"
+                " "$file"
+              fi
+            done
+          done
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.SZNUPER_PAT }}
+        run: |
+          TAG="${{ needs.release.outputs.tag }}"
+          cd sznuper
+          git checkout -b "healthchecks-$TAG"
+          git add internal/initcmd/defaults/
+          git commit -m "build: bump healthchecks to $TAG"
+          git push -u origin "healthchecks-$TAG"
+
+          BODY="## Updated binaries\n\n| Binary | SHA256 |\n|--------|--------|\n"
+          for bin in "$GITHUB_WORKSPACE"/build/*; do
+            name=$(basename "$bin")
+            sha=$(sha256sum "$bin" | cut -d' ' -f1)
+            BODY+="| $name | \`$sha\` |\n"
+          done
+
+          gh pr create \
+            --title "build: bump healthchecks to $TAG" \
+            --body "$(echo -e "$BODY")"
