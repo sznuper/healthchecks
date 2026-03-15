@@ -2,12 +2,12 @@
  * ssh_journal - Detect SSH auth events from journalctl --output=json stdin.
  *
  * Reads stdin line by line (journalctl -f --output=json output). Parses SSH
- * failure and login events in real time. Designed for the pipe trigger:
+ * failure, login, and logout events in real time. Designed for the pipe trigger:
  *
  *   - name: ssh_journal
  *     healthcheck: file://ssh_journal
  *     trigger:
- *       pipe: "journalctl -f --since=now -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
+ *       pipe: "journalctl -f --since=now SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager"
  *     template: "SSH {{event.type}} from {{event.host}} as {{event.user}}"
  *     cooldown: 5m
  *     notify:
@@ -15,9 +15,13 @@
  *     events:
  *       on_unmatched: drop
  *       override:
- *         failure:
- *           cooldown: 1m
  *         login: {}
+ *         logout: {}
+ *
+ * Uses facility-based journalctl filtering (SYSLOG_FACILITY=10 for auth,
+ * SYSLOG_FACILITY=4 for auth-priv) instead of unit-based (-u ssh -u sshd)
+ * to capture events from sshd-session (e.g. disconnects).
+ * See: https://unix.stackexchange.com/a/401398
  *
  * Args (via environment):
  *   HEALTHCHECK_ARG_ADVANCED - When set, emit all extra JSON fields per event
@@ -31,13 +35,14 @@
  *   "Connection closed by authenticating user USER HOST port N [preauth]" -> failure
  *   "Accepted publickey for USER from HOST"                      -> login
  *   "Accepted password for USER from HOST"                       -> login
+ *   "Disconnected from user USER HOST port N"                    -> logout
  *
  * Note: "Connection closed by invalid user" is always paired with "Invalid user"
  * — it is skipped to avoid double-counting.
  *
  * Output (per matched event):
  *   --- event
- *   type=failure|login
+ *   type=failure|login|logout
  *   user=USER
  *   host=HOST
  *   timestamp=YYYY-MM-DDTHH:MM:SSZ
@@ -57,9 +62,10 @@
 /* Parsed event */
 #define EV_FAILURE 0
 #define EV_LOGIN   1
+#define EV_LOGOUT  2
 
 struct event {
-    int  type; /* EV_FAILURE or EV_LOGIN */
+    int  type; /* EV_FAILURE, EV_LOGIN, or EV_LOGOUT */
     char user[MAX_STR];
     char host[MAX_STR];
     char timestamp[32];      /* "2026-03-05T13:55:05Z" */
@@ -216,6 +222,7 @@ static void emit_extra_fields(const char *json, const char **skip, int n_skip) {
  *   "Connection closed by authenticating user USER HOST port N [preauth]"
  *   "Accepted publickey for USER from HOST"
  *   "Accepted password for USER from HOST"
+ *   "Disconnected from user USER HOST port N"
  *
  * Skipped (double-count avoidance):
  *   "Connection closed by invalid user ..."
@@ -314,6 +321,26 @@ static int parse_message(const char *line, struct event *ev) {
         return 1;
     }
 
+    /* --- logout: Disconnected from user USER HOST port N --- */
+    p = strstr(line, "Disconnected from user ");
+    if (p) {
+        p += strlen("Disconnected from user ");
+        const char *user_end = strchr(p, ' ');
+        if (!user_end) return 0;
+        size_t ulen = (size_t)(user_end - p);
+        if (ulen == 0 || ulen >= MAX_STR) return 0;
+
+        const char *host_start = user_end + 1;
+        const char *host_end   = strchr(host_start, ' ');
+        size_t hlen = host_end ? (size_t)(host_end - host_start) : strlen(host_start);
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
+
+        ev->type = EV_LOGOUT;
+        memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
+        memcpy(ev->host, host_start, hlen); ev->host[hlen] = '\0';
+        return 1;
+    }
+
     return 0;
 }
 
@@ -381,7 +408,10 @@ int main(void) {
 
     for (int i = 0; i < event_count; i++) {
         printf("--- event\n");
-        printf("type=%s\n", events[i].type == EV_FAILURE ? "failure" : "login");
+        const char *type_str = events[i].type == EV_FAILURE ? "failure"
+                             : events[i].type == EV_LOGIN   ? "login"
+                             :                                 "logout";
+        printf("type=%s\n", type_str);
         printf("user=%s\n", events[i].user);
         printf("host=%s\n", events[i].host);
         printf("timestamp=%s\n", events[i].timestamp);

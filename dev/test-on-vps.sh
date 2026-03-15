@@ -99,7 +99,7 @@ for BINARY in "$HC_DIR"/build/*; do
         ssh_journal)
             # pipe trigger: run journalctl on the server and feed output to binary
             "$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$BINARY" \
-                -- "journalctl -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager | /root/ssh_journal" \
+                -- "journalctl SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager | /root/ssh_journal" \
                 || EXIT_CODE=$?
             ;;
         *)

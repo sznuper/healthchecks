@@ -220,13 +220,15 @@ mock_input=$(cat <<'MOCK'
 {"MESSAGE":"Server listening on 0.0.0.0 port 22","__REALTIME_TIMESTAMP":"1772539306000000"}
 {"MESSAGE":"Accepted publickey for deploy from 192.168.1.100 port 44222 ssh2","__REALTIME_TIMESTAMP":"1772539307000000"}
 {"MESSAGE":"Connection closed by invalid user test 1.2.3.4 port 55000 [preauth]","__REALTIME_TIMESTAMP":"1772539308000000"}
+{"MESSAGE":"Disconnected from user deploy 192.168.1.100 port 44222","__REALTIME_TIMESTAMP":"1772539309000000"}
 MOCK
 )
 output=$(echo "$mock_input" | "$BUILD_DIR/ssh_journal" 2>&1)
 event_count=$(count_matches "$output" "^--- event$")
-if [ "$event_count" -eq 2 ]; then pass "exactly 2 events"; else fail "expected 2 events, got $event_count"; fi
+if [ "$event_count" -eq 3 ]; then pass "exactly 3 events"; else fail "expected 3 events, got $event_count"; fi
 assert_has "$output" "^type=failure$"         "has failure event"
 assert_has "$output" "^type=login$"           "has login event"
+assert_has "$output" "^type=logout$"          "has logout event"
 assert_has "$output" "^user="                 "user field"
 assert_has "$output" "^host="                 "host field"
 assert_has "$output" "^timestamp="            "timestamp field"
@@ -271,6 +273,17 @@ MOCK
 output=$(echo "$mock_input" | "$BUILD_DIR/ssh_journal" 2>&1)
 event_count=$(count_matches "$output" "^type=login$")
 if [ "$event_count" -eq 2 ]; then pass "2 login events"; else fail "expected 2 login events, got $event_count"; fi
+echo ""
+
+echo "=== ssh_journal: logout events ==="
+mock_input=$(cat <<'MOCK'
+{"MESSAGE":"Disconnected from user deploy 192.168.1.100 port 44222","__REALTIME_TIMESTAMP":"1000000"}
+{"MESSAGE":"Disconnected from user root 10.0.0.1 port 22","__REALTIME_TIMESTAMP":"2000000"}
+MOCK
+)
+output=$(echo "$mock_input" | "$BUILD_DIR/ssh_journal" 2>&1)
+event_count=$(count_matches "$output" "^type=logout$")
+if [ "$event_count" -eq 2 ]; then pass "2 logout events"; else fail "expected 2 logout events, got $event_count"; fi
 echo ""
 
 echo "=== ssh_journal: ADVANCED mode ==="

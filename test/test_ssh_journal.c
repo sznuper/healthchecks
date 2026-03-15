@@ -140,6 +140,52 @@ static MunitResult test_parse_accepted_publickey_no_port(const MunitParameter pa
     return MUNIT_OK;
 }
 
+/* ========== parse_message: logout patterns ========== */
+
+static MunitResult test_parse_disconnected_from_user(const MunitParameter params[], void *data) {
+    (void)params; (void)data;
+    struct event ev;
+    int matched = parse_message(
+        "Disconnected from user deploy 192.168.1.100 port 44222", &ev);
+    munit_assert_int(matched, ==, 1);
+    munit_assert_int(ev.type, ==, EV_LOGOUT);
+    munit_assert_string_equal(ev.user, "deploy");
+    munit_assert_string_equal(ev.host, "192.168.1.100");
+    return MUNIT_OK;
+}
+
+static MunitResult test_parse_disconnected_from_user_ipv6(const MunitParameter params[], void *data) {
+    (void)params; (void)data;
+    struct event ev;
+    int matched = parse_message(
+        "Disconnected from user root ::1 port 22", &ev);
+    munit_assert_int(matched, ==, 1);
+    munit_assert_int(ev.type, ==, EV_LOGOUT);
+    munit_assert_string_equal(ev.user, "root");
+    munit_assert_string_equal(ev.host, "::1");
+    return MUNIT_OK;
+}
+
+static MunitResult test_parse_disconnected_from_user_no_port(const MunitParameter params[], void *data) {
+    (void)params; (void)data;
+    struct event ev;
+    int matched = parse_message("Disconnected from user alice 10.0.0.1", &ev);
+    munit_assert_int(matched, ==, 1);
+    munit_assert_int(ev.type, ==, EV_LOGOUT);
+    munit_assert_string_equal(ev.user, "alice");
+    munit_assert_string_equal(ev.host, "10.0.0.1");
+    return MUNIT_OK;
+}
+
+/* "Disconnected from user" with no host — should NOT match */
+static MunitResult test_parse_disconnected_no_host(const MunitParameter params[], void *data) {
+    (void)params; (void)data;
+    struct event ev;
+    int matched = parse_message("Disconnected from user alice", &ev);
+    munit_assert_int(matched, ==, 0);
+    return MUNIT_OK;
+}
+
 /* ========== parse_message: skip/no-match patterns ========== */
 
 /* "Connection closed by invalid user" is skipped to avoid double-counting */
@@ -375,6 +421,12 @@ static MunitTest tests[] = {
     {"/parse_message/accepted_publickey", test_parse_accepted_publickey, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"/parse_message/accepted_password", test_parse_accepted_password, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"/parse_message/accepted_publickey_no_port", test_parse_accepted_publickey_no_port, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+
+    /* parse_message: logout */
+    {"/parse_message/disconnected_from_user", test_parse_disconnected_from_user, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/parse_message/disconnected_from_user_ipv6", test_parse_disconnected_from_user_ipv6, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/parse_message/disconnected_from_user_no_port", test_parse_disconnected_from_user_no_port, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/parse_message/disconnected_no_host", test_parse_disconnected_no_host, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
 
     /* parse_message: skip/no-match */
     {"/parse_message/connection_closed_invalid_skip", test_parse_connection_closed_invalid_skip, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},

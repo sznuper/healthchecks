@@ -110,5 +110,5 @@ section "ssh_journal output (alert_on=both)"
 echo ""
 
 "$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$HC_DIR/build/ssh_journal" \
-    -- "journalctl -u ssh -u sshd --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager \
+    -- "journalctl SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager \
         | env HEALTHCHECK_ARG_ALERT_ON=both /root/ssh_journal"

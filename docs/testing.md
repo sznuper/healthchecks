@@ -38,7 +38,7 @@ Each binary receives input matching its trigger type:
 | `cpu_usage`   | interval | none                                                               |
 | `disk_usage`  | interval | none                                                               |
 | `memory_usage`| interval | none                                                               |
-| `ssh_journal` | pipe     | `journalctl -u ssh -u sshd --output=json --no-pager`               |
+| `ssh_journal` | pipe     | `journalctl SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --no-pager` |
 
 ---
 
@@ -80,7 +80,7 @@ make build/ssh_journal CC=~/repos/cosmopolitan/cosmocc/bin/cosmocc
 
 # 3. Run it on the server
 ./dev/run-binary.sh $SERVER_IP build/ssh_journal \
-    -- "journalctl -u ssh -u sshd --output=json --no-pager | /root/ssh_journal"
+    -- "journalctl SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --no-pager | /root/ssh_journal"
 
 # 4. Repeat 2–3
 
