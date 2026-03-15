@@ -134,6 +134,22 @@ jobs:
         env:
           SERVER_NAME: hc-e2e-ssh-journal-${{ matrix.arch }}
 
+  unit-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run unit tests
+        run: make test TEST_CC=gcc
+
+  output-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run output format tests
+        run: dev/test-output.sh
+
   valgrind:
     runs-on: ubuntu-24.04
     steps:
@@ -206,7 +222,7 @@ jobs:
           done
 
   release:
-    needs: [vps-all, vps-ssh-journal, valgrind, benchmark]
+    needs: [unit-test, output-test, vps-all, vps-ssh-journal, valgrind, benchmark]
     if: inputs.release == true
     runs-on: ubuntu-latest
     permissions:

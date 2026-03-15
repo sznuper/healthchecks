@@ -21,4 +21,13 @@ check-fmt:
 clean:
 	rm -rf build
 
-.PHONY: all fmt check-fmt clean
+TEST_CC = gcc
+TESTS   = build/test_sznuper build/test_ssh_journal
+
+build/test_%: test/test_%.c test/munit.c | build
+	$(TEST_CC) -o $@ $< test/munit.c
+
+test: $(TESTS)
+	@for t in $(TESTS); do echo "--- $$t ---"; ./$$t; done
+
+.PHONY: all fmt check-fmt clean test
