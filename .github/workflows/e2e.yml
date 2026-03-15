@@ -1,0 +1,119 @@
+name: E2E
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: shipurjan/setup-cosmopolitan@1f92831f1e4197d9ed52449de0f9d1efc2bdf04e
+        with:
+          version: 'nightly'
+
+      - name: Build healthchecks
+        run: make
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: checks
+          path: build/
+
+  vps-all:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86-64
+            server_type: cx23
+          - arch: aarch64
+            server_type: cax11
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: checks
+          path: build/
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Run all healthchecks on VPS
+        run: ./dev/test-on-vps.sh --skip-build
+        env:
+          SERVER_NAME: hc-e2e-all-${{ matrix.arch }}
+          SERVER_TYPE: ${{ matrix.server_type }}
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
+
+      - name: Cleanup VPS (safety net)
+        if: always()
+        run: |
+          SERVER_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+            "https://api.hetzner.cloud/v1/servers?name=$SERVER_NAME" | \
+            jq -r '.servers[0].id // ""')
+          if [[ -n "$SERVER_ID" ]]; then
+            curl -s -o /dev/null -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+              "https://api.hetzner.cloud/v1/servers/$SERVER_ID"
+            echo "Deleted leftover server $SERVER_ID ($SERVER_NAME)"
+          fi
+        env:
+          SERVER_NAME: hc-e2e-all-${{ matrix.arch }}
+
+  vps-ssh-journal:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86-64
+            server_type: cx23
+          - arch: aarch64
+            server_type: cax11
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: checks
+          path: build/
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Run ssh_journal lifecycle test on VPS
+        run: ./dev/test-ssh-journal.sh --skip-build
+        env:
+          SERVER_NAME: hc-e2e-ssh-journal-${{ matrix.arch }}
+          SERVER_TYPE: ${{ matrix.server_type }}
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY_NAME }}
+
+      - name: Cleanup VPS (safety net)
+        if: always()
+        run: |
+          SERVER_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+            "https://api.hetzner.cloud/v1/servers?name=$SERVER_NAME" | \
+            jq -r '.servers[0].id // ""')
+          if [[ -n "$SERVER_ID" ]]; then
+            curl -s -o /dev/null -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+              "https://api.hetzner.cloud/v1/servers/$SERVER_ID"
+            echo "Deleted leftover server $SERVER_ID ($SERVER_NAME)"
+          fi
+        env:
+          SERVER_NAME: hc-e2e-ssh-journal-${{ matrix.arch }}

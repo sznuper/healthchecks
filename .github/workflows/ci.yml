@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run unit tests
+        run: make test TEST_CC=gcc
+
+  output-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run output format tests
+        run: dev/test-output.sh
+
+  valgrind:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+
+      - name: Build healthchecks with gcc
+        run: |
+          mkdir -p build
+          for src in src/*.c; do
+            name=$(basename "$src" .c)
+            gcc -o "build/$name" "$src"
+          done
+
+      - name: Valgrind disk_usage
+        run: valgrind --leak-check=full --error-exitcode=1 ./build/disk_usage
+
+      - name: Valgrind cpu_usage
+        run: valgrind --leak-check=full --error-exitcode=1 ./build/cpu_usage
+        env:
+          HEALTHCHECK_ARG_SAMPLE_MS: '100'
+
+      - name: Valgrind memory_usage
+        run: valgrind --leak-check=full --error-exitcode=1 ./build/memory_usage
