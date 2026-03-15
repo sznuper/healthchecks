@@ -158,6 +158,8 @@ jobs:
         run: |
           TAG="${{ needs.release.outputs.tag }}"
           cd sznuper
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "healthchecks-$TAG"
           git add internal/initcmd/defaults/
           git commit -m "build: bump healthchecks to $TAG"
