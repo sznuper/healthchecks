@@ -1,6 +1,10 @@
 /*
  * disk_usage - Check disk usage for a given mount point.
  *
+ * Requirements:
+ *   - statvfs() syscall (any POSIX/Linux system)
+ *   - Mount point must exist and be accessible
+ *
  * Args (via environment):
  *   HEALTHCHECK_ARG_MOUNT          - Mount point to check (default: "/")
  *   HEALTHCHECK_ARG_THRESHOLD_WARN_PERCENT - Warning threshold as percentage 0-100 (default: 80)

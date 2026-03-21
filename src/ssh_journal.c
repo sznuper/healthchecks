@@ -1,6 +1,11 @@
 /*
  * ssh_journal - Detect SSH auth events from journalctl --output=json stdin.
  *
+ * Requirements:
+ *   - systemd/journald (journalctl provides the JSON input via pipe trigger)
+ *   - sshd logging to the journal (syslog facility 4 or 10)
+ *   - JSON input must contain MESSAGE and __REALTIME_TIMESTAMP fields
+ *
  * Reads stdin line by line (journalctl -f --output=json output). Parses SSH
  * failure, login, and logout events in real time. Designed for the pipe trigger:
  *

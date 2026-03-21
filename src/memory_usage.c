@@ -1,6 +1,9 @@
 /*
  * memory_usage - Check memory usage by reading /proc/meminfo.
  *
+ * Requirements:
+ *   - Linux 3.14+ (reads /proc/meminfo, requires MemAvailable field)
+ *
  * Reads /proc/meminfo once (memory values are instantaneous, no sampling
  * needed) and computes usage as (MemTotal - MemAvailable) / MemTotal,
  * matching free/htop behavior that accounts for buffers, cache, and

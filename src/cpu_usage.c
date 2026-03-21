@@ -1,6 +1,9 @@
 /*
  * cpu_usage - Check CPU usage by sampling /proc/stat.
  *
+ * Requirements:
+ *   - Linux 2.6.11+ (reads /proc/stat, requires steal field)
+ *
  * Reads /proc/stat twice with a configurable delay, computes deltas to
  * determine current CPU usage percentages.
  *
