@@ -137,7 +137,7 @@ jobs:
         run: |
           TAG="${{ needs.release.outputs.tag }}"
           cd sznuper/internal/initcmd/defaults
-          for file in base.yml systemd.yml; do
+          for file in *.yml; do
             count=$(yq '.alerts | length' "$file")
             for i in $(seq 0 $((count - 1))); do
               hc=$(yq ".alerts[$i].healthcheck" "$file")
