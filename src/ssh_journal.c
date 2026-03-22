@@ -41,9 +41,14 @@
  *   "Accepted publickey for USER from HOST"                      -> login
  *   "Accepted password for USER from HOST"                       -> login
  *   "Disconnected from user USER HOST port N"                    -> logout
+ *   "Connection closed by HOST port N"                           -> logout (user=<unknown>)
  *
  * Note: "Connection closed by invalid user" is always paired with "Invalid user"
  * — it is skipped to avoid double-counting.
+ * Note: "Connection closed by HOST port N" (without "authenticating user" or
+ * "invalid user") is a non-graceful disconnect from an authenticated session
+ * (e.g. non-interactive SSH like `ssh host 'command'`). User is unavailable
+ * in the message so it is set to "<unknown>".
  *
  * Output (per matched event):
  *   --- event
@@ -343,6 +348,24 @@ static int parse_message(const char *line, struct event *ev) {
         ev->type = EV_LOGOUT;
         memcpy(ev->user, p, ulen); ev->user[ulen] = '\0';
         memcpy(ev->host, host_start, hlen); ev->host[hlen] = '\0';
+        return 1;
+    }
+
+    /* --- logout: Connection closed by HOST port N (no user in message) --- */
+    p = strstr(line, "Connection closed by ");
+    if (p) {
+        /* Skip variants already handled above (authenticating/invalid user) */
+        if (strstr(line, "authenticating user") || strstr(line, "invalid user"))
+            return 0;
+
+        p += strlen("Connection closed by ");
+        const char *host_end = strchr(p, ' ');
+        size_t hlen = host_end ? (size_t)(host_end - p) : strlen(p);
+        if (hlen == 0 || hlen >= MAX_STR) return 0;
+
+        ev->type = EV_LOGOUT;
+        strncpy(ev->user, "<unknown>", MAX_STR - 1); ev->user[MAX_STR - 1] = '\0';
+        memcpy(ev->host, p, hlen); ev->host[hlen] = '\0';
         return 1;
     }
 
