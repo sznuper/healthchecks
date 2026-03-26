@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sznuper/.github/main/assets/readme-banner.png" style="max-width: 100%; width: 600px;" alt="Sznuper logo">
+</p>
+
 # healthchecks
 
 Official healthchecks for [Sznuper](https://github.com/sznuper/sznuper).
