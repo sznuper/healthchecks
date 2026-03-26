@@ -4,6 +4,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: e2e-vps
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
