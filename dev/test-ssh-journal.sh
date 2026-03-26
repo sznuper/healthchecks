@@ -109,6 +109,39 @@ sleep 3
 section "ssh_journal output (alert_on=both)"
 echo ""
 
-"$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$HC_DIR/build/ssh_journal" \
+output=$("$SCRIPT_DIR/run-binary.sh" "$SERVER_IP" "$HC_DIR/build/ssh_journal" \
     -- "journalctl SYSLOG_FACILITY=10 SYSLOG_FACILITY=4 --output=json --output-fields=MESSAGE,__REALTIME_TIMESTAMP --no-pager \
-        | env HEALTHCHECK_ARG_ALERT_ON=both /root/ssh_journal"
+        | env HEALTHCHECK_ARG_ALERT_ON=both /root/ssh_journal" 2>&1)
+echo "$output"
+
+# ── Assertions ────────────────────────────────────────────────────────────────
+
+section "Verifying output"
+
+PASS=0
+FAIL=0
+pass() { PASS=$((PASS + 1)); echo "  PASS: $1"; }
+fail() { FAIL=$((FAIL + 1)); echo "  FAIL: $1"; }
+
+event_count=$(echo "$output" | grep -c "^--- event$" || true)
+if [ "$event_count" -gt 0 ]; then
+    pass "has events ($event_count)"
+else
+    fail "expected at least 1 event, got 0"
+fi
+
+if echo "$output" | grep -q "^type=failure$"; then
+    pass "has failure events"
+else
+    fail "missing failure events"
+fi
+
+if echo "$output" | grep -q "^type=login$"; then
+    pass "has login events"
+else
+    fail "missing login events"
+fi
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed"
+[[ $FAIL -eq 0 ]]

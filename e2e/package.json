@@ -1,0 +1,13 @@
+{
+  "name": "healthchecks-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "execa": "9.6.1",
+    "vitest": "4.1.2"
+  }
+}
